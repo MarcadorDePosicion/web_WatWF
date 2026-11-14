@@ -1,8 +1,56 @@
-# WAT WF Plan — etap 1
+# WAT WF Plan — etap 2
+
+## Podgląd aplikacji
+
+Z katalogu repozytorium uruchom:
+
+```powershell
+python -m http.server 8080 --bind 127.0.0.1
+```
+
+Otwórz http://127.0.0.1:8080/ w przeglądarce. Gotowy CSS jest w repozytorium,
+więc do samego podglądu nie trzeba instalować Node.js ani pakietów. Nie otwieraj
+`index.html` przez `file://`, ponieważ przeglądarka musi pobrać plik JSON przez HTTP.
+Serwer zatrzymasz skrótem Ctrl+C.
+
+Interfejs używa lokalnie skompilowanego Tailwind CSS i modułów JavaScript.
+Pokazuje dzienną oś czasu wszystkich grup, wybór daty i tygodniowy pasek dni.
+Karty mają temat, obiekt oznaczony kolorem i tekstem, grupę, prowadzącego,
+godziny oraz rozwijane uwagi i źródła. Obsługiwane są stany ładowania,
+błędu z ponowieniem, pustego pliku i dnia bez wpisów. Braki danych nie są
+zastępowane domyślnym prowadzącym ani obiektem.
+
+Data startowa to dzisiejszy dzień w Europe/Warsaw; poza zakresem danych
+wybierany jest pierwszy lub ostatni dzień planu. Wszystkie daty są widoczne
+w kalendarzu także wtedy, gdy nie zawierają wpisów. Nie ma jeszcze filtrów
+osobistych, localStorage, karty najbliższych zajęć, PWA ani powiadomień.
+
+### Rozwój frontendu
+
+Do kompilacji użyj Node.js 22+ i pnpm 11. Po zmianie HTML, JS lub `styles/input.css`:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm run build:css
+pnpm run check
+```
+
+Zapisuj w commicie także `styles/app.css`. Pakiety Tailwind są przypięte do
+wersji 4.1.18; aplikacja nie pobiera stylów, fontów ani skryptów z CDN.
+Opcjonalny skrypt budowania @parcel/watcher jest wyłączony; używany jest
+dostarczany przez pakiet moduł dla platformy. Jednorazowa kompilacja CSS
+nie wymaga trybu obserwowania zmian.
+
+Weryfikacja etapu 2: cztery testy Node.js (indeksowanie 6209 wpisów,
+daty i zmiany roku/czasu, walidacja danych, kategorie obiektów), kontrola
+składni oraz podgląd w przeglądarce przy szerokościach 320, 390 i 1280 px.
+Sprawdzono dzień z 87 wpisami, pusty dzień, błąd pobrania i ponowienie.
+
+## Pobieranie i parsowanie danych — etap 1
 
 Parser dokumentów SWF WAT. Wynik: `data/schedule.json` (tablica rekordów)
 oraz `data/schedule.meta.json` (pochodzenie i raport jakości).
-Projekt nie zawiera jeszcze frontendu, PWA ani GitHub Actions.
+Projekt nie zawiera jeszcze PWA ani GitHub Actions.
 
 ## Uruchomienie lokalne
 

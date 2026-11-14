@@ -1,0 +1,15 @@
+{
+  "name": "wat-wf-plan",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:css": "tailwindcss -i ./styles/input.css -o ./styles/app.css --minify",
+    "watch:css": "tailwindcss -i ./styles/input.css -o ./styles/app.css --watch",
+    "check": "node --check app.js && node --test tests/schedule.test.js"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.18",
+    "tailwindcss": "4.1.18"
+  }
+}

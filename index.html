@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Czytelny plan zajęć wychowania fizycznego WAT. Godziny, grupy, prowadzący i obiekty w jednym miejscu.">
+  <title>WAT · Plan zajęć WF</title>
+  <link rel="stylesheet" href="./styles/app.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Przejdź do planu</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Informacje o planie">
+      <a class="brand" href="./" aria-label="WAT WF — strona główna">
+        <span class="brand-mark" aria-hidden="true">W<span>↗</span></span>
+        <span><strong>WAT<span class="text-accent"> / </span>WF</strong><small>PLAN ZAJĘĆ</small></span>
+      </a>
+      <div class="sidebar-body">
+        <p class="eyebrow mb-4">STREFA STUDENTA</p>
+        <div class="nav-current"><span aria-hidden="true">▦</span> Rozkład zajęć <span class="ml-auto text-accent" aria-hidden="true">↗</span></div>
+        <div class="semester-note"><span class="status-dot" aria-hidden="true"></span> Semestr zimowy <strong>2026 / 2027</strong></div>
+        <div class="sidebar-bottom">
+          <p class="eyebrow mb-4">OBIEKTY NA PLANIE</p>
+          <ul class="legend space-y-3">
+            <li><span class="legend-dot water"></span>Pływalnia</li>
+            <li><span class="legend-dot hall"></span>Hale i sale sportowe</li>
+            <li><span class="legend-dot strength"></span>Siłownie</li>
+            <li><span class="legend-dot outdoor"></span>Obiekty zewnętrzne</li>
+            <li><span class="legend-dot other"></span>Pozostałe / niepodane</li>
+          </ul>
+          <div class="source-note">
+            <p class="font-semibold text-ink">Dane ze źródeł SWF WAT</p>
+            <p class="mt-2">Nieoficjalna przeglądarka planu. W razie zmian sprawdź komunikaty Studium.</p>
+            <a href="https://www.wojsko-polskie.pl/wat/swf-rozklady-zajec/" target="_blank" rel="noopener noreferrer">Strona źródłowa <span aria-hidden="true">↗</span><span class="sr-only"> (nowa karta)</span></a>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-shell">
+      <header class="topbar"><span>WOJSKOWA AKADEMIA TECHNICZNA</span><span class="hidden sm:inline">STUDIUM WYCHOWANIA FIZYCZNEGO</span><span class="sm:hidden">SWF</span></header>
+      <main id="main" tabindex="-1">
+        <section class="page-intro" aria-labelledby="page-title">
+          <div><p class="eyebrow text-accent mb-3">ROZKŁAD / 2026–2027</p><h1 id="page-title">Plan zajęć<span class="text-accent">.</span></h1><p class="intro-description">Sprawdź godzinę. Poznaj obiekt. Przygotuj się do zajęć.</p></div>
+          <div class="intro-emblem" aria-hidden="true"><svg viewBox="0 0 180 100" fill="none"><rect x="2" y="2" width="176" height="96" rx="46"/><rect x="13" y="13" width="154" height="74" rx="35"/><rect x="24" y="24" width="132" height="52" rx="24"/><path d="M90 2v96M62 24v52M118 24v52"/><circle cx="90" cy="50" r="14"/></svg><span>SPRAWNOŚĆ · SYSTEMATYCZNOŚĆ</span></div>
+        </section>
+
+        <div id="load-state" class="state-panel" role="status"><span class="loading-dot" aria-hidden="true"></span><h2>Wczytywanie planu</h2><p>Pobieramy rozkład zajęć z dokumentów SWF WAT.</p></div>
+        <noscript><p class="state-panel">Włącz JavaScript, aby wyświetlić plan zajęć.</p></noscript>
+
+        <section id="schedule" hidden aria-label="Dzienny plan zajęć">
+          <div class="overview flex flex-wrap items-center justify-between gap-3"><p><span class="status-dot" aria-hidden="true"></span><span id="data-range"></span></p><p id="total-count" class="font-mono"></p></div>
+          <section class="calendar" aria-label="Wybór dnia">
+            <div class="calendar-toolbar flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2"><button id="previous-day" class="icon-button" aria-label="Poprzedni dzień">←</button><h2 id="month-label"></h2><button id="next-day" class="icon-button" aria-label="Następny dzień">→</button></div>
+              <div class="flex items-center gap-2"><button id="today" class="quiet-button">Dzisiaj</button><label class="date-label"><span class="sr-only">Wybierz datę zajęć</span><input id="date-picker" type="date" required></label></div>
+            </div>
+            <div id="week" class="week-grid" aria-label="Dni tygodnia"></div>
+          </section>
+          <div class="day-heading flex flex-wrap items-end justify-between gap-3"><div><p class="eyebrow mb-2">PLAN DNIA · WSZYSTKIE GRUPY</p><h2 id="day-title"></h2></div><p id="day-count" class="count-badge" role="status" aria-live="polite" aria-atomic="true"></p></div>
+          <div id="timeline"></div>
+          <p class="plan-footnote">Godziny w strefie Europe/Warsaw. Brak wpisu nie oznacza potwierdzonego odwołania zajęć.</p>
+        </section>
+      </main>
+      <footer class="footer flex flex-wrap justify-between gap-2"><span>WAT WF <span class="text-accent">/</span> Plan na dobry trening</span><span>Na podstawie dokumentów SWF · <a href="./data/schedule.meta.json">Informacje o danych</a></span></footer>
+    </div>
+  </div>
+</body>
+</html>
