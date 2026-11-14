@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "timezone": "Europe/Warsaw",
+  "academicYear": "2026/2027",
+  "semester": "winter",
+  "sourcePage": "https://www.wojsko-polskie.pl/wat/swf-rozklady-zajec/",
+  "timeGridSource": "https://wml.wat.edu.pl/siatka-godzin/",
+  "importMode": "local-files",
+  "sources": [
+    {
+      "role": "schedule",
+      "file": "rozklad_zajec_zima_lato_2026-2027_akt_2026-10-22.xlsx",
+      "sha256": "13aa42dbc270ff52b5eccc0b76d2d44668483d0f25ccc5b0937878fa25543f32"
+    },
+    {
+      "role": "staff",
+      "file": "plan_obciazenia_kadry_studium_wf_2026_z_do_wyslania_22_10_akt_2026-10-22.xlsx",
+      "sha256": "a226f636f6a0f12990214ef0cebc1b8f1eba295216e548d4bb0f2a3c1381363b"
+    },
+    {
+      "role": "guidelines",
+      "file": "wytyczne_do_zajec_z_wychowania_fizycznego_semestr_zimowy_2026_2027_r_v2_akt_2026-09-30.docx",
+      "sha256": "7b073ce261e94aa495662d55d5a5fe02dbba22c601acde09d8a921b9d974e254"
+    },
+    {
+      "role": "retakes",
+      "file": "2026_11_harmonogram_powtarzanie_przedmiotu_wf_akt_2026-10-30.xlsx",
+      "sha256": "46adb905d335aa4f1ff277bdcb135d7dd2f8356c6a58a2ae78e3e8a5fe9afeb5"
+    }
+  ],
+  "limitations": [
+    "Pełne opisy poszczególnych lekcji nie są dostępne; zachowano ich numery i kody.",
+    "Puste lecturer/location oznaczają brak danych, nie brak zajęć.",
+    "Kolumna W zachowana jako uwaga; brak reguł przypisania zastępstw do dat.",
+    "Aktualność plików względem strony WAT nie została potwierdzona online."
+  ],
+  "report": {
+    "excludedSheets": [
+      {
+        "sheet": "semestr L",
+        "title": "Rok akademicki 2025/2026 - semestr letni"
+      }
+    ],
+    "excludedEvents": [
+      {
+        "file": "rozklad_zajec_zima_lato_2026-2027_akt_2026-10-22.xlsx",
+        "sheet": "semestr Z",
+        "cell": "H54",
+        "value": "ODPRAWA SWF"
+      },
+      {
+        "file": "rozklad_zajec_zima_lato_2026-2027_akt_2026-10-22.xlsx",
+        "sheet": "semestr Z",
+        "cell": "L175",
+        "value": "ODPRAWA SWF"
+      },
+      {
+        "file": "rozklad_zajec_zima_lato_2026-2027_akt_2026-10-22.xlsx",
+        "sheet": "semestr Z",
+        "cell": "P316",
+        "value": "WIGILIA SWF"
+      },
+      {
+        "file": "rozklad_zajec_zima_lato_2026-2027_akt_2026-10-22.xlsx",
+        "sheet": "semestr Z",
+        "cell": "T316",
+        "value": "ODPRAWA SWF"
+      }
+    ],
+    "calendarCorrections": [
+      {
+        "cell": "I773",
+        "headerDate": "2026-11-31",
+        "date": "2026-10-31"
+      }
+    ],
+    "nonEmptyCalendarCells": 6201,
+    "recordCount": 6209,
+    "regularBeforeDeduplication": 6197,
+    "retakes": 12,
+    "dateRange": [
+      "2026-10-01",
+      "2027-01-29"
+    ],
+    "missingLecturer": 226,
+    "missingLocation": 183,
+    "conflictingSlots": []
+  }
+}
