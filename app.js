@@ -1,8 +1,17 @@
 import {warsawToday, shiftDate, weekDates, formatDate, indexSchedule, locationTone, entryCount} from './js/schedule.js';
+import {
+  preparePlan, filterOptions, matchingPlan, restoreFilters, saveFilters,
+  normalizeSearch, groupLabel, upcomingLesson, countdownLabel,
+} from './js/personal-plan.js';
 
 const get = id => document.getElementById(id);
-let byDate = new Map(), selectedDate, firstDate, lastDate;
-const today = warsawToday();
+const filterLabels = {
+  company: 'Wszystkie kompanie i wydziały',
+  group: 'Wszystkie plutony i grupy',
+  lecturer: 'Wszyscy prowadzący',
+};
+let plan = [], matches = [], visibleByDate = new Map();
+let filters, selectedDate, firstDate, lastDate, upcoming, countdownTimer;
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -17,7 +26,7 @@ function lessonCard(lesson) {
   top.append(element('span', 'location-badge', lesson.location || 'Obiekt niepodany'), element('span', 'lesson-hours', `${lesson.startTime}–${lesson.endTime}`));
   const title = element('h3', '', lesson.topic);
   const meta = element('div', 'lesson-meta');
-  meta.append(element('span', 'group-tag', lesson.company === lesson.platoon ? lesson.platoon : `${lesson.company} · ${lesson.platoon}`));
+  meta.append(element('span', 'group-tag', groupLabel(lesson)));
   if (lesson.year && !lesson.platoon.includes('rok')) meta.append(element('span', '', /rok/i.test(lesson.year) ? lesson.year : `${lesson.year} rok`));
   if (lesson.kind === 'retake') meta.append(element('span', '', 'Powtarzanie przedmiotu'));
   card.append(top, title, meta, element('p', 'lecturer', lesson.lecturer || 'Prowadzący niepodany'));
@@ -33,8 +42,69 @@ function lessonCard(lesson) {
   return card;
 }
 
+function hasFilters() {
+  return Boolean(normalizeSearch(filters.query) || filters.company || filters.group || filters.lecturer);
+}
+
+function updateFilterOptions() {
+  for (const [field, label] of Object.entries(filterLabels)) {
+    const select = get(`filter-${field}`);
+    const options = filterOptions(plan, filters, field);
+    select.replaceChildren(new Option(label, ''), ...options.map(([value, name]) => new Option(name, value)));
+    select.value = filters[field];
+    select.disabled = options.length === 0;
+  }
+}
+
+function updateUpcoming(now = Date.now(), refresh = false) {
+  const next = upcomingLesson(matches, now);
+  if (refresh || next !== upcoming) {
+    upcoming = next;
+    get('upcoming-details').hidden = !next;
+    get('upcoming-empty').hidden = Boolean(next);
+    get('upcoming-countdown').hidden = !next;
+    if (next) {
+      const {lesson} = next;
+      const date = formatDate(lesson.date, {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
+      get('upcoming-time').textContent = `${date} · ${lesson.startTime}–${lesson.endTime}`;
+      get('upcoming-topic').textContent = lesson.topic;
+      get('upcoming-location').textContent = `Obiekt: ${lesson.location || 'niepodany'}`;
+      get('upcoming-lecturer').textContent = `Prowadzący: ${lesson.lecturer || 'niepodany'}`;
+      get('upcoming-group').textContent = groupLabel(lesson);
+    } else {
+      get('upcoming-empty').textContent = hasFilters()
+        ? 'Brak nadchodzących zajęć pasujących do filtrów.'
+        : 'Brak nadchodzących zajęć w tym rozkładzie.';
+    }
+  }
+  if (next) {
+    const label = countdownLabel(next.startsAt - now);
+    const timer = get('upcoming-countdown');
+    if (timer.textContent !== label) timer.textContent = label;
+  }
+}
+
+function applyFilters() {
+  matches = matchingPlan(plan, filters);
+  visibleByDate = new Map();
+  for (const {lesson} of matches) {
+    if (!visibleByDate.has(lesson.date)) visibleByDate.set(lesson.date, []);
+    visibleByDate.get(lesson.date).push(lesson);
+  }
+  const active = hasFilters();
+  const now = Date.now();
+  if (active && !visibleByDate.has(selectedDate) && matches.length) {
+    selectedDate = (upcomingLesson(matches, now) ?? matches.at(-1)).lesson.date;
+  }
+  get('clear-filters').disabled = !(filters.query || active);
+  get('day-scope').textContent = active ? 'PLAN DNIA · WYBRANE FILTRY' : 'PLAN DNIA · WSZYSTKIE GRUPY';
+  updateUpcoming(now, true);
+  render();
+}
+
 function render() {
-  const lessons = byDate.get(selectedDate) || [];
+  const today = warsawToday();
+  const lessons = visibleByDate.get(selectedDate) || [];
   get('date-picker').value = selectedDate;
   get('month-label').textContent = formatDate(selectedDate, {month:'long', year:'numeric'});
   get('day-title').textContent = formatDate(selectedDate, {weekday:'long', day:'numeric', month:'long'});
@@ -48,10 +118,10 @@ function render() {
     button.type = 'button';
     button.disabled = iso < firstDate || iso > lastDate;
     button.setAttribute('aria-pressed', String(iso === selectedDate));
-    button.setAttribute('aria-label', `${formatDate(iso, {weekday:'long', day:'numeric', month:'long'})}, ${entryCount(byDate.get(iso)?.length || 0)}${iso === today ? ', dzisiaj' : ''}`);
+    button.setAttribute('aria-label', `${formatDate(iso, {weekday:'long', day:'numeric', month:'long'})}, ${entryCount(visibleByDate.get(iso)?.length || 0)}${iso === today ? ', dzisiaj' : ''}`);
     if (iso === today) button.setAttribute('aria-current', 'date');
     button.append(element('span','weekday', formatDate(iso, {weekday:'short'})), element('span','number', String(Number(iso.slice(-2)))));
-    const dot = element('span', byDate.has(iso) ? 'day-indicator' : 'min-h-[5px]');
+    const dot = element('span', visibleByDate.has(iso) ? 'day-indicator' : 'min-h-[5px]');
     dot.setAttribute('aria-hidden', 'true');
     button.append(dot);
     button.addEventListener('click', () => select(iso));
@@ -80,7 +150,9 @@ function render() {
   }
   if (!lessons.length) {
     const empty = element('div','state-panel');
-    empty.append(element('span','text-accent text-3xl','—'),element('h3','','Brak wpisów na ten dzień'), element('p','','W dostarczonym rozkładzie nie ma zajęć z tą datą. Wybierz inny dzień w kalendarzu.'));
+    const title = hasFilters() && !matches.length ? 'Brak zajęć pasujących do filtrów' : 'Brak wpisów na ten dzień';
+    const message = hasFilters() ? 'Zmień filtry lub wybierz inny dzień w kalendarzu.' : 'Wybierz inny dzień w kalendarzu.';
+    empty.append(element('h3', '', title), element('p', '', message));
     fragment.append(empty);
   }
   get('timeline').replaceChildren(fragment);
@@ -101,21 +173,28 @@ async function load() {
     const response = await fetch('./data/schedule.json', {signal: AbortSignal.timeout(20000)});
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const records = await response.json();
-    byDate = indexSchedule(records);
+    const byDate = indexSchedule(records);
     if (!byDate.size) {
       state.replaceChildren(element('h2','','Plan nie zawiera jeszcze wpisów'),element('p','','Plik danych jest dostępny, ale nie zawiera zajęć do wyświetlenia.'));
       return;
     }
     const dates = [...byDate.keys()].sort();
     [firstDate,lastDate] = [dates[0], dates.at(-1)];
+    const today = warsawToday();
     selectedDate = today < firstDate ? firstDate : today > lastDate ? lastDate : today;
     get('date-picker').min = firstDate;
     get('date-picker').max = lastDate;
     get('data-range').textContent = `${formatDate(firstDate,{day:'2-digit',month:'2-digit',year:'numeric'})} — ${formatDate(lastDate,{day:'2-digit',month:'2-digit',year:'numeric'})}`;
     get('total-count').textContent = `${new Intl.NumberFormat('pl-PL').format(records.length)} wpisów w rozkładzie`;
-    render();
+    plan = preparePlan(byDate);
+    filters = restoreFilters(plan);
+    get('filter-query').value = filters.query;
+    updateFilterOptions();
+    applyFilters();
     state.hidden = true;
     get('schedule').hidden = false;
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(updateUpcoming, 1000);
   } catch (error) {
     console.error('Nie udało się wczytać planu:', error);
     state.replaceChildren(element('h2','','Nie udało się wczytać planu'), element('p','','Sprawdź połączenie i spróbuj ponownie. Jeśli uruchamiasz projekt lokalnie, otwórz go przez serwer HTTP, nie bezpośrednio z pliku.'));
@@ -131,5 +210,37 @@ get('date-picker').addEventListener('change', event => {
 });
 get('previous-day').addEventListener('click', () => select(shiftDate(selectedDate, -1)));
 get('next-day').addEventListener('click', () => select(shiftDate(selectedDate, 1)));
-get('today').addEventListener('click', () => select(today));
+get('today').addEventListener('click', () => select(warsawToday()));
+get('plan-filters').addEventListener('submit', event => event.preventDefault());
+get('filter-query').addEventListener('input', event => {
+  filters.query = event.target.value;
+  saveFilters(filters);
+  applyFilters();
+});
+for (const field of Object.keys(filterLabels)) {
+  get(`filter-${field}`).addEventListener('change', event => {
+    filters[field] = event.target.value;
+    updateFilterOptions();
+    saveFilters(filters);
+    applyFilters();
+  });
+}
+get('clear-filters').addEventListener('click', () => {
+  filters = {query: '', company: '', group: '', lecturer: ''};
+  get('filter-query').value = '';
+  get('filter-query').focus();
+  updateFilterOptions();
+  saveFilters(filters);
+  applyFilters();
+});
+get('show-upcoming').addEventListener('click', () => {
+  if (!upcoming) return;
+  select(upcoming.lesson.date);
+  const heading = get('day-title');
+  heading.focus({preventScroll: true});
+  heading.scrollIntoView({block: 'start'});
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && filters) updateUpcoming();
+});
 load();

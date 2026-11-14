@@ -1,4 +1,4 @@
-# WAT WF Plan — etap 2
+# WAT WF Plan — etap 3
 
 ## Podgląd aplikacji
 
@@ -20,10 +20,20 @@ godziny oraz rozwijane uwagi i źródła. Obsługiwane są stany ładowania,
 błędu z ponowieniem, pustego pliku i dnia bez wpisów. Braki danych nie są
 zastępowane domyślnym prowadzącym ani obiektem.
 
-Data startowa to dzisiejszy dzień w Europe/Warsaw; poza zakresem danych
-wybierany jest pierwszy lub ostatni dzień planu. Wszystkie daty są widoczne
-w kalendarzu także wtedy, gdy nie zawierają wpisów. Nie ma jeszcze filtrów
-osobistych, localStorage, karty najbliższych zajęć, PWA ani powiadomień.
+Wyszukiwarka dopasowuje grupę, temat, obiekt i prowadzącego także bez polskich
+znaków. Listy kompanii lub wydziałów, plutonów lub grup i prowadzących ograniczają
+się wzajemnie. Pola wyboru oraz tekst zapytania zapisują się w danej przeglądarce
+i wracają po odświeżeniu. Przycisk „Wyczyść filtry” przywraca plan wszystkich grup.
+
+Plan otwiera się na dzisiejszej dacie w Warszawie, ograniczonej do zakresu rozkładu.
+Jeśli aktywne filtry wykluczają wszystkie wpisy z wybranego dnia, plan przechodzi
+do dnia najbliższych pasujących zajęć lub do ostatniego pasującego dnia z danych.
+Kalendarz pozwala też ręcznie przejść do dnia bez wpisów.
+
+Karta „Najbliższe zajęcia” wyszukuje następny pasujący termin w całym rozkładzie,
+niezależnie od dnia otwartego w kalendarzu. Odliczanie uwzględnia strefę
+Europe/Warsaw i aktualizuje się co sekundę. Po rozpoczęciu zajęć karta przechodzi
+do kolejnego terminu. Bez filtrów uwzględnia wszystkie grupy.
 
 ### Rozwój frontendu
 
@@ -41,10 +51,8 @@ Opcjonalny skrypt budowania @parcel/watcher jest wyłączony; używany jest
 dostarczany przez pakiet moduł dla platformy. Jednorazowa kompilacja CSS
 nie wymaga trybu obserwowania zmian.
 
-Weryfikacja etapu 2: cztery testy Node.js (indeksowanie 6209 wpisów,
-daty i zmiany roku/czasu, walidacja danych, kategorie obiektów), kontrola
-składni oraz podgląd w przeglądarce przy szerokościach 320, 390 i 1280 px.
-Sprawdzono dzień z 87 wpisami, pusty dzień, błąd pobrania i ponowienie.
+Testy Node.js obejmują indeksowanie, poprawność danych, powiązania filtrów,
+wyszukiwanie bez polskich znaków, zapis wyboru i odliczanie przy zmianie czasu.
 
 ## Pobieranie i parsowanie danych — etap 1
 

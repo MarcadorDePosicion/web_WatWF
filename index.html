@@ -51,6 +51,40 @@
         <noscript><p class="state-panel">Włącz JavaScript, aby wyświetlić plan zajęć.</p></noscript>
 
         <section id="schedule" hidden aria-label="Dzienny plan zajęć">
+          <section class="upcoming-card" aria-labelledby="upcoming-heading">
+            <div class="upcoming-heading">
+              <h2 id="upcoming-heading">Najbliższe zajęcia</h2>
+              <p id="upcoming-countdown" class="upcoming-countdown" hidden></p>
+            </div>
+            <p id="upcoming-empty" class="upcoming-empty" hidden></p>
+            <div id="upcoming-details" hidden>
+              <p id="upcoming-time" class="upcoming-time"></p>
+              <h3 id="upcoming-topic" class="upcoming-topic"></h3>
+              <div class="upcoming-info">
+                <p id="upcoming-location"></p>
+                <p id="upcoming-lecturer"></p>
+              </div>
+              <div class="upcoming-footer">
+                <p id="upcoming-group"></p>
+                <button type="button" id="show-upcoming" class="quiet-button">Pokaż dzień zajęć <span aria-hidden="true">↓</span></button>
+              </div>
+            </div>
+          </section>
+          <form id="plan-filters" class="filter-panel" role="search" aria-labelledby="filter-title" autocomplete="off">
+            <div class="filter-heading">
+              <h2 id="filter-title">Wyszukaj w planie</h2>
+              <button id="clear-filters" type="button" class="quiet-button" disabled>Wyczyść filtry</button>
+            </div>
+            <label class="filter-field" for="filter-query">
+              <span>Szukaj zajęć</span>
+              <input type="search" id="filter-query" maxlength="120" placeholder="Grupa, temat, obiekt lub nazwisko">
+            </label>
+            <div class="filter-grid">
+              <label class="filter-field" for="filter-company"><span>Kompania / wydział</span><select id="filter-company"></select></label>
+              <label class="filter-field" for="filter-group"><span>Pluton / grupa</span><select id="filter-group"></select></label>
+              <label class="filter-field" for="filter-lecturer"><span>Prowadzący</span><select id="filter-lecturer"></select></label>
+            </div>
+          </form>
           <div class="overview flex flex-wrap items-center justify-between gap-3"><p><span class="status-dot" aria-hidden="true"></span><span id="data-range"></span></p><p id="total-count" class="font-mono"></p></div>
           <section class="calendar" aria-label="Wybór dnia">
             <div class="calendar-toolbar flex flex-wrap items-center justify-between gap-3">
@@ -59,7 +93,7 @@
             </div>
             <div id="week" class="week-grid" aria-label="Dni tygodnia"></div>
           </section>
-          <div class="day-heading flex flex-wrap items-end justify-between gap-3"><div><p class="eyebrow mb-2">PLAN DNIA · WSZYSTKIE GRUPY</p><h2 id="day-title"></h2></div><p id="day-count" class="count-badge" role="status" aria-live="polite" aria-atomic="true"></p></div>
+          <div class="day-heading flex flex-wrap items-end justify-between gap-3"><div><p id="day-scope" class="eyebrow mb-2">PLAN DNIA</p><h2 id="day-title" tabindex="-1"></h2></div><p id="day-count" class="count-badge" role="status" aria-live="polite" aria-atomic="true"></p></div>
           <div id="timeline"></div>
           <p class="plan-footnote">Godziny w strefie Europe/Warsaw. Brak wpisu nie oznacza potwierdzonego odwołania zajęć.</p>
         </section>
