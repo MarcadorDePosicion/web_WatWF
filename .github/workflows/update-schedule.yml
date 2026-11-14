@@ -1,0 +1,91 @@
+name: Update WAT WF schedule
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+      timezone: Europe/Warsaw
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check for an update without committing it
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: wat-wf-schedule-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: ${{ github.event_name == 'schedule' || !inputs.dry_run }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.13'
+
+      - name: Install and test the importer
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Download and validate the WAT schedule
+        id: import
+        shell: bash
+        run: |
+          candidate="$RUNNER_TEMP/wat-schedule"
+          if ! python -m scraper.parse --download --baseline data/schedule.meta.json --output "$candidate/schedule.json"; then
+            echo "::error::WAT import failed. Review the importer output for the source or format error. The published schedule was left intact."
+            echo "WAT import failed. The published schedule was left intact." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          test -s "$candidate/schedule.json"
+          test -s "$candidate/schedule.meta.json"
+          sources_changed=$(python - "$candidate/schedule.meta.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          def sources(path):
+              return json.loads(Path(path).read_text(encoding='utf-8'))['sources']
+
+          print(str(sources('data/schedule.meta.json') != sources(sys.argv[1])).lower())
+          PY
+          )
+          if cmp -s data/schedule.json "$candidate/schedule.json" && [[ "$sources_changed" == false ]]; then
+            echo "No schedule or source changes. No commit needed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "WAT returned a valid update to the schedule or its source documents." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report a dry run
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: echo "Dry run. No files were committed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit and push the updated schedule
+        if: steps.import.outputs.changed == 'true' && (github.event_name == 'schedule' || !inputs.dry_run)
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          candidate="$RUNNER_TEMP/wat-schedule"
+          cp -- "$candidate/schedule.json" data/schedule.json
+          cp -- "$candidate/schedule.meta.json" data/schedule.meta.json
+          git add -- data/schedule.json data/schedule.meta.json
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'chore(data): refresh WAT WF schedule'
+          git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
+          echo "Published schedule commit $(git rev-parse --short HEAD)." >> "$GITHUB_STEP_SUMMARY"

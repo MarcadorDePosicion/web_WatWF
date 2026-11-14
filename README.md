@@ -1,4 +1,4 @@
-# WAT WF Plan — etap 5
+# WAT WF Plan
 
 ## Podgląd aplikacji
 
@@ -105,6 +105,31 @@ wyszukiwanie bez polskich znaków, zapis wyboru i odliczanie przy zmianie czasu.
 Testy service workera sprawdzają uruchomienie planu offline, zastąpienie danych
 po udanej aktualizacji i zachowanie zapisanej wersji przy błędzie pobrania.
 
+## Automatyczna aktualizacja rozkładu
+
+Workflow `.github/workflows/update-schedule.yml` sprawdza stronę WAT codziennie
+o 06:17 według strefy `Europe/Warsaw`. Po dodaniu pliku do domyślnej gałęzi
+można też wybrać **Actions → Update WAT WF schedule → Run workflow**. Domyślnie
+opcja `dry_run` pozwala uruchomić pobranie i walidację bez tworzenia commita.
+
+Workflow testuje importer i generuje wynik w katalogu tymczasowym. Gdy wykryje
+zmianę, aktualizuje `data/schedule.json` razem z `data/schedule.meta.json` jednym
+commitem bota na gałęzi domyślnej. Gdy ani plan, ani nazwy i sumy kontrolne
+źródeł się nie zmieniły, workflow pomija commit. Błąd pobrania, niezgodność
+formatu lub konflikt rewizji kończy zadanie błędem przed
+publikacją danych. Szczegóły są w logu i podsumowaniu uruchomienia.
+
+Reguły gałęzi muszą zezwalać na zapis przez `GITHUB_TOKEN`. Jeśli inny commit
+trafi na gałąź podczas pobierania, zwykły push może zostać odrzucony. Ponów
+workflow na aktualnej gałęzi. Przy publikacji GitHub Pages z gałęzi commit bota
+nie wyzwala nowego wdrożenia witryny. [Dokumentacja GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#troubleshooting-publishing-from-a-branch)
+
+Na dzień 14 listopada 2026 r. serwis WAT nadal blokuje automatyczne pobieranie.
+Wybór aktualizacji i zabezpieczenie poprzednich danych sprawdzono w testach
+na lokalnych kopiach źródeł. Pierwszy udany import z serwisu pozostaje do
+potwierdzenia w Actions. Parser obsługuje układ znany z zimy 2026/2027.
+Zmianę semestru lub nieznany układ trzeba najpierw sprawdzić na nowych plikach.
+
 ## Pobieranie i parsowanie danych — etap 1
 
 Parser dokumentów SWF WAT. Wynik: `data/schedule.json` (tablica rekordów)
@@ -129,21 +154,17 @@ Inny wynik: `--output .cache/test/schedule.json`.
 Pobranie ze strony i import jednym poleceniem:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scraper.parse --download
+.\.venv\Scripts\python.exe -m scraper.parse --download --baseline data/schedule.meta.json --output .cache/test/schedule.json
 ```
 
-Sam downloader: `python -m scraper.download`. Wykrywa załączniki XLSX, XLS,
-PDF i DOCX na stronie rozkładów oraz bezpośrednio powiązanych podstronach SWF.
-Parser obsługuje **przeanalizowany format XLSX i legendę DOCX**, nie dowolne
-XLS/PDF. Wymaga dokładnie jednej wersji każdego z czterech dokumentów.
-Przy niejednoznacznych wersjach, nieznanych kodach i zmianach formatu przerywa
-import, zamiast wybierać plik na podstawie kolejności linków.
-
-Strona https://www.wojsko-polskie.pl/wat/swf-rozklady-zajec/ blokowała
-automatyczny dostęp. Pełny import zweryfikowano lokalnie. Tryb online jest
-zaimplementowany, ale nie zweryfikowano go od pobrania do wyniku na serwerze
-WAT. Blokada kończy import błędem, zachowując istniejący plan.
-Nie potwierdzono, czy na stronie są nowsze wersje niż dostarczone dokumenty.
+Sam downloader (`python -m scraper.download`) zapisuje wykryte załączniki
+XLSX, XLS, PDF i DOCX z oficjalnej strony i bezpośrednio połączonych podstron SWF.
+Importer online pobiera tylko role potrzebne do planu (rozkład, obciążenie,
+wytyczne i powtarzanie WF). Przy kilku plikach dla jednej roli wybiera
+najnowszą datę z końcówki `_akt_RRRR-MM-DD` lub `_akt_RR-MM-DD`. Równorzędne pliki o tej samej
+treści traktuje jako jedną wersję. Przy różnych plikach o nieporównywalnych
+datach lub różnej treści z tą samą datą przerywa import. Opcja `--baseline`
+porównuje daty rewizji z metadanymi opublikowanego planu.
 
 ## Źródła i interpretacja
 

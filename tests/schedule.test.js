@@ -8,11 +8,34 @@ import {
 } from '../js/personal-plan.js';
 
 const records = JSON.parse(readFileSync(new URL('../data/schedule.json', import.meta.url)));
+const poolLesson = {
+  id: 'pool-1', date: '2026-11-16', startTime: '08:00', endTime: '09:35',
+  company: '14 kp', platoon: '5 pl', lecturer: 'mgr Dawid Zapłata',
+  topic: 'Pływanie', location: 'Pływalnia', locationCode: 'P',
+  notes: '', kind: 'regular',
+};
+const retakeLesson = {
+  ...poolLesson, id: 'retake', date: '2026-11-14', endTime: '09:30',
+  company: 'Powtarzanie WF', platoon: 'II rok', lecturer: 'mgr Dawid ZAPŁATA',
+  kind: 'retake',
+};
+const plan = preparePlan(indexSchedule([
+  poolLesson,
+  {...poolLesson, id: 'pool-2', date: '2026-11-23'},
+  {...poolLesson, id: 'other-platoon', platoon: '1 pl'},
+  {...poolLesson, id: 'other-company', company: '1 kp'},
+  retakeLesson,
+]));
+const blank = {company: '', group: '', lecturer: '', query: ''};
 
-test('all source records are indexed without loss, including retakes', () => {
+test('the published schedule can be indexed without losing records', () => {
   const index = indexSchedule(records);
+  assert.ok(index.size > 0);
   assert.equal([...index.values()].reduce((sum, lessons) => sum + lessons.length, 0), records.length);
-  assert.equal(index.get('2026-11-14').length, 4);
+});
+
+test('retake durations are preserved and unscheduled dates have no records', () => {
+  const index = indexSchedule([poolLesson, retakeLesson]);
   assert.equal(index.get('2026-11-14')[0].endTime, '09:30');
   assert.equal(index.has('2026-11-15'), false);
 });
@@ -26,7 +49,7 @@ test('Warsaw dates and week navigation handle year and DST boundaries', () => {
 
 test('malformed data is rejected rather than shown partially', () => {
   assert.throws(() => indexSchedule({}));
-  const [valid] = records;
+  const valid = poolLesson;
   assert.throws(() => indexSchedule([valid, valid]));
   assert.throws(() => indexSchedule([{...valid,date:'2026-02-30'}]));
   assert.throws(() => indexSchedule([{...valid,startTime:'24:00'}]));
@@ -41,9 +64,6 @@ test('facility categories and Polish counts', () => {
   assert.deepEqual([1,4,12,22].map(entryCount),['1 wpis','4 wpisy','12 wpisów','22 wpisy']);
 });
 
-const plan = preparePlan(indexSchedule(records));
-const blank = {company: '', group: '', lecturer: '', query: ''};
-
 test('company and group options narrow each other without mixing platoons', () => {
   const company = '14 kp';
   const group = JSON.stringify([company, '5 pl']);
@@ -52,17 +72,16 @@ test('company and group options narrow each other without mixing platoons', () =
   assert.ok(labels.every(([, label]) => label.startsWith('14 kp · ')));
   assert.deepEqual(filterOptions(plan, {...blank, group}, 'company'), [[company, company]]);
   const matches = matchingPlan(plan, {...blank, company, group, query: 'plywanie'});
-  assert.ok(matches.some(({lesson}) => lesson.date === '2026-11-16' && lesson.locationCode === 'P'));
-  assert.ok(matches.every(({lesson}) => lesson.company === company && lesson.platoon === '5 pl'));
+  assert.deepEqual(matches.map(({lesson}) => lesson.id), ['pool-1', 'pool-2']);
 });
 
-test('lecturer selection includes uppercase spellings from the retake workbook', () => {
+test('lecturer selection includes uppercase spellings for retake lessons', () => {
   const options = filterOptions(plan, blank, 'lecturer');
   const entries = options.filter(([value]) => value.includes('dawid zapłata'));
   assert.equal(entries.length, 1);
   const results = matchingPlan(plan, {...blank, lecturer: entries[0][0], query: 'zaplata'});
   assert.ok(results.some(({lesson}) => lesson.kind === 'regular'));
-  assert.equal(results.filter(({lesson}) => lesson.date === '2026-11-14' && lesson.kind === 'retake').length, 4);
+  assert.ok(results.some(({lesson}) => lesson === retakeLesson));
 });
 
 test('saved filters survive loading and invalid or unavailable storage is tolerated', t => {

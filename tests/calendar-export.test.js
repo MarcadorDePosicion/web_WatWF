@@ -7,8 +7,12 @@ import {indexSchedule} from '../js/schedule.js';
 
 const records = JSON.parse(readFileSync(new URL('../data/schedule.json', import.meta.url)));
 const now = new Date('2026-11-14T17:35:00Z');
-const beforeClockChange = records.find(lesson => lesson.date === '2026-10-05' && lesson.startTime === '08:00');
-const afterClockChange = records.find(lesson => lesson.date === '2026-11-16' && lesson.startTime === '08:00');
+const beforeClockChange = {
+  id: 'pool-summer-time', date: '2026-10-05', startTime: '08:00', endTime: '09:35',
+  company: '14 kp', platoon: '5 pl', lecturer: 'Anna Nowak',
+  topic: 'Pływanie', location: 'Pływalnia', notes: '',
+};
+const afterClockChange = {...beforeClockChange, id: 'pool-winter-time', date: '2026-11-16'};
 
 function unfoldedLines(calendar) {
   return calendar.replace(/\r\n[ \t]/g, '').split('\r\n');
@@ -48,14 +52,15 @@ test('folds UTF-8 without splitting characters or allowing raw calendar lines fr
   assert.ok(lines.some(line => line.includes('Prowadzący: Nie podano') && line.includes('Uwagi: Pierwsza\\nDruga\\nTrzecia')));
 });
 
-test('exports the real group selection across all dates', () => {
-  const filters = {company: '14 kp', group: JSON.stringify(['14 kp', '5 pl']), lecturer: '', query: ''};
+test('exports the current published records for a group across all dates', () => {
   const plan = preparePlan(indexSchedule(records));
+  const [{company, group}] = plan;
+  const filters = {company, group, lecturer: '', query: ''};
   const lessons = matchingPlan(plan, filters).map(({lesson}) => lesson);
-  assert.ok(lessons.length > 1);
   const lines = unfoldedLines(buildCalendar(lessons, {now}));
-  assert.equal(lines.filter(line => line === 'BEGIN:VEVENT').length, lessons.length);
-  assert.equal(lines.filter(line => line.startsWith('DESCRIPTION:Grupa: 14 kp · 5 pl')).length, lessons.length);
+  const expected = records.filter(lesson => lesson.company === company && JSON.stringify([company, lesson.platoon]) === group);
+  assert.equal(lines.filter(line => line === 'BEGIN:VEVENT').length, expected.length);
+  assert.equal(lines.filter(line => line === 'TRIGGER:-PT30M').length, expected.length);
 });
 
 test('rejects empty calendars and times skipped during the Warsaw spring clock change', () => {

@@ -7,15 +7,33 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urljoin, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 SOURCE_URL = "https://www.wojsko-polskie.pl/wat/swf-rozklady-zajec/"
+SOURCE_HOSTS = {"www.wojsko-polskie.pl", "wojsko-polskie.pl"}
 EXTENSIONS = {".xlsx", ".xls", ".pdf", ".docx"}
 MAX_BYTES = 30 * 1024 * 1024
 
 
 class SourceError(RuntimeError):
     """Source unavailable or not a verified source document."""
+
+
+def is_source_url(url):
+    try:
+        parts = urlsplit(url)
+        return (parts.scheme == "https" and parts.hostname in SOURCE_HOSTS
+                and parts.username is None and parts.password is None
+                and parts.port in (None, 443))
+    except ValueError:
+        return False
+
+
+class SourceRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not is_source_url(newurl):
+            raise SourceError(f"Przekierowanie poza dozwoloną domenę HTTPS WAT: {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 class Links(HTMLParser):
@@ -45,23 +63,27 @@ def discover(html, base_url):
     parser.feed(html)
     documents, pages = set(), set()
     for href in parser.links:
-        url = urljoin(base_url, href).split("#", 1)[0]
-        parts = urlsplit(url)
-        if parts.scheme != "https":
+        try:
+            url = urljoin(base_url, href).split("#", 1)[0]
+        except ValueError:
             continue
+        if not is_source_url(url):
+            continue
+        parts = urlsplit(url)
         suffix = Path(unquote(parts.path)).suffix.lower()
         if suffix in EXTENSIONS:
             documents.add(url)
-        elif (parts.netloc == urlsplit(SOURCE_URL).netloc
-              and parts.path.startswith("/wat/swf-") and url != base_url):
+        elif parts.path.startswith("/wat/swf-") and url != base_url:
             pages.add(url)
     return sorted(documents), sorted(pages)
 
 
 def fetch(url):
+    if not is_source_url(url):
+        raise SourceError("Pobieranie jest dozwolone tylko z oficjalnej domeny HTTPS WAT.")
     request = Request(url, headers={"User-Agent": "WAT-WF-Plan/0.1 (schedule source importer)"})
     try:
-        with urlopen(request, timeout=45) as response:
+        with build_opener(SourceRedirectHandler()).open(request, timeout=45) as response:
             body = response.read(MAX_BYTES + 1)
             if len(body) > MAX_BYTES:
                 raise SourceError(f"Plik przekracza limit 30 MiB: {url}")
@@ -77,7 +99,8 @@ def verify_document(body, suffix):
         raise SourceError(f"Odpowiedź nie jest plikiem {suffix}; możliwa blokada serwera.")
 
 
-def download_sources(directory):
+def download_sources(directory, *, select=None):
+    """Discover links, optionally select a subset, and download that subset."""
     html = fetch(SOURCE_URL).decode("utf-8-sig", errors="replace")
     documents, pages = discover(html, SOURCE_URL)
     document_urls = set(documents)
@@ -87,10 +110,13 @@ def download_sources(directory):
         found, _ = discover(child, url)
         document_urls.update(found)
     if not document_urls:
-        raise SourceError("Brak linków XLSX/XLS/PDF. Wymagana analiza HTML lub nowego układu strony.")
+        raise SourceError("Brak linków XLSX/XLS/PDF/DOCX w oficjalnym serwisie WAT.")
+    selected = document_urls if select is None else set(select(sorted(document_urls)))
+    if not selected or not selected.issubset(document_urls):
+        raise SourceError("Brak dopasowanych dokumentów spośród linków SWF WAT.")
     directory.mkdir(parents=True, exist_ok=True)
     manifest = []
-    for url in sorted(document_urls):
+    for url in sorted(selected):
         suffix = Path(unquote(urlsplit(url).path)).suffix.lower()
         body = fetch(url)
         verify_document(body, suffix)
@@ -113,7 +139,6 @@ def main():
     except SourceError as exc:
         parser.exit(1, f"Błąd źródła: {exc}\n")
     print(f"Pobrano {len(manifest)} dokumentów do {args.output}.")
-    print("Dokumenty wymagają analizy układu przed implementacją parsera schedule.json.")
 
 
 if __name__ == "__main__":

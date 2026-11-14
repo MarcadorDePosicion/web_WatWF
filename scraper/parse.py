@@ -1,21 +1,27 @@
 """Import the inspected SWF workbook layout, retaining source coordinates."""
 import argparse
-from collections import Counter
 from datetime import date, datetime, timedelta
+from fnmatch import fnmatchcase
 import hashlib
 import json
 from pathlib import Path
 import re
 import shutil
 import tempfile
+from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
-from zipfile import ZipFile
+from zipfile import BadZipFile, ZipFile
 
 import openpyxl
 
 from .download import SourceError, SOURCE_URL, download_sources
 
 ROOT = Path(__file__).resolve().parents[1]
+ACADEMIC_YEAR = '2026/2027'
+FIRST_YEAR, LAST_YEAR = map(int, ACADEMIC_YEAR.split('/'))
+SOURCE_ROLES = {'schedule': 'rozklad_zajec*.xlsx', 'staff': 'plan_obciazenia*.xlsx',
+                'guidelines': 'wytyczne*.docx', 'retakes': '*harmonogram_powtarzanie*.xlsx'}
+REVISION = re.compile(r'_akt_((?:\d{2})?\d{2}-\d{2}-\d{2})(?:_\d+)?$', re.I)
 DAYS = ['PONIEDZIAŁEK', 'WTOREK', 'ŚRODA', 'CZWARTEK', 'PIĄTEK', 'SOBOTA', 'NIEDZIELA']
 TIMES = {'1/2': ('08:00', '09:35'), '3/4': ('09:50', '11:25'),
          '5/6': ('11:40', '13:15'), '7/8': ('13:30', '15:05'),
@@ -55,6 +61,8 @@ def legends(path):
     ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
     paragraphs = [clean(''.join(t.text or '' for t in p.findall('.//w:t', ns)))
                   for p in root.findall('.//w:p', ns)]
+    if not any('SEMESTRZE ZIMOWYM' in line.upper() and ACADEMIC_YEAR in line.replace(' ', '') for line in paragraphs):
+        raise SourceError(f'Wytyczne nie dotyczą semestru zimowego {ACADEMIC_YEAR}.')
     locations, topics, civilian = {}, {}, {}
     for line in paragraphs:
         match = re.fullmatch(r'([A-ZŻ])\s*[–-]\s*(.+?)\s*[–-]\s*obiekt (wewnętrzny|zewnętrzny)', line)
@@ -75,8 +83,9 @@ def legends(path):
 
 def staff(path):
     sheet = load(path).worksheets[0]
-    if 'zimowym' not in clean(sheet['A1'].value):
-        raise SourceError('Obciążenie kadry nie dotyczy semestru zimowego.')
+    title = clean(sheet['A1'].value)
+    if 'zimowym' not in title or ACADEMIC_YEAR not in title:
+        raise SourceError(f'Obciążenie kadry nie dotyczy semestru zimowego {ACADEMIC_YEAR}.')
     names = {code: clean(sheet[f'{column}2'].value) for column, code in STAFF_COLUMNS.items()}
     if any(not name for name in names.values()):
         raise SourceError('Zmieniony układ kolumn obciążenia kadry.')
@@ -136,12 +145,12 @@ def parse_schedule(path, names, legend, report):
     selected = []
     for sheet in workbook:
         title = clean(sheet['F1'].value)
-        if '2026/2027' in title and 'zimowy' in title:
+        if ACADEMIC_YEAR in title and 'zimowy' in title:
             selected.append(sheet)
         else:
             report['excludedSheets'].append({'sheet': sheet.title, 'title': title})
     if len(selected) != 1:
-        raise SourceError('Oczekiwano jednego arkusza zimowego 2026/2027.')
+        raise SourceError(f'Oczekiwano jednego arkusza zimowego {ACADEMIC_YEAR}.')
     sheet = selected[0]
     result = []
     dates, block = {}, None
@@ -149,6 +158,8 @@ def parse_schedule(path, names, legend, report):
     for row in range(1, sheet.max_row + 1):
         first = clean(sheet.cell(row, 1).value).replace('\\', '/')
         if first in DAYS:
+            if (clean(sheet.cell(row + 1, 1).value), clean(sheet.cell(row + 1, 2).value)) != ('G', 'Nr grupy'):
+                raise SourceError(f'Zmieniony nagłówek planu w wierszu {row + 1}.')
             dates, block = {}, None
             month = 9  # first winter column can be an unlabelled September (Wednesday).
             for col in range(5, 23):
@@ -157,7 +168,7 @@ def parse_schedule(path, names, legend, report):
                 number = clean(sheet.cell(row + 1, col).value)
                 if not number.isdigit():
                     raise SourceError(f'Nieprawidłowy nagłówek daty {sheet.title}:{row+1}:{col}')
-                header_date = f'{2026 if month >= 9 else 2027}-{month:02d}-{int(number):02d}'
+                header_date = f'{FIRST_YEAR if month >= 9 else LAST_YEAR}-{month:02d}-{int(number):02d}'
                 candidate = None
                 try:
                     candidate = date.fromisoformat(header_date)
@@ -178,11 +189,15 @@ def parse_schedule(path, names, legend, report):
                 if candidate.weekday() != DAYS.index(first):
                     raise SourceError(f'Data {candidate} nie odpowiada dniowi {first}.')
                 dates[col] = candidate
+            if clean(sheet.cell(row + 1, 23).value).isdigit():
+                raise SourceError(f'Nowa kolumna kalendarza w wierszu {row + 1}.')
             continue
         if first in TIMES:
             block = first
         elif first in ('G', 'Nr tygodnia', '"ZATWIERDZAM"'):
             block = None
+        elif dates and first:
+            raise SourceError(f'Nieznany blok godzinowy w wierszu {row}: {first}.')
         group = clean(sheet.cell(row, 2).value)
         if not block or not group:
             continue
@@ -217,17 +232,36 @@ def parse_schedule(path, names, legend, report):
 
 def parse_retakes(path, legend):
     sheet = load(path).worksheets[0]
+    if (clean(sheet['A3'].value).casefold(), clean(sheet['B3'].value).casefold()) != ('godzina', 'rocznik'):
+        raise SourceError('Zmienione nagłówki harmonogramu powtarzania WF.')
+    if sheet.max_row > 200 or sheet.max_column > 150:
+        raise SourceError('Nieobsługiwany rozmiar harmonogramu powtarzania WF.')
+    semester_start, semester_end = date(FIRST_YEAR, 9, 1), date(LAST_YEAR, 3, 1)
+    groups = []
+    for row in range(4, sheet.max_row + 1):
+        if clean(sheet.cell(row, 2).value):
+            groups.append(row)
+        elif any(clean(sheet.cell(row, col).value) for col in range(1, sheet.max_column + 1)):
+            raise SourceError(f'Brak rocznika w wierszu {row} harmonogramu powtarzania WF.')
     result = []
-    for col in (3, 5, 7):
-        day = merged_value(sheet, 2, col)
-        if not isinstance(day, datetime):
-            raise SourceError('Brak daty harmonogramu powtarzania WF.')
-        for row in range(4, 8):
+    for col in range(3, sheet.max_column + 1, 2):
+        if not any(clean(sheet.cell(row, column).value) for row in range(2, sheet.max_row + 1) for column in (col, col + 1)):
+            continue
+        day = sheet.cell(2, col).value
+        headers = tuple(clean(sheet.cell(3, column).value).casefold() for column in (col, col + 1))
+        if headers != ('prowadzący', 'temat') or not isinstance(day, datetime):
+            raise SourceError(f'Zmieniony układ daty i tematu w kolumnie {col} harmonogramu powtarzania WF.')
+        if not semester_start <= day.date() < semester_end:
+            raise SourceError(f'Termin powtarzania WF poza semestrem zimowym: {day.date()}.')
+        for row in groups:
             hours = clean(merged_value(sheet, row, 1))
             match = re.fullmatch(r'(\d{2})[.:](\d{2})-(\d{2})[.:](\d{2})', hours)
             if not match:
                 raise SourceError(f'Nieznane godziny powtarzania: {hours}')
             times = (f'{match[1]}:{match[2]}', f'{match[3]}:{match[4]}')
+            if (int(match[1]) > 23 or int(match[3]) > 23 or int(match[2]) > 59
+                    or int(match[4]) > 59 or times[0] >= times[1]):
+                raise SourceError(f'Nieprawidłowe godziny powtarzania: {hours}.')
             year = clean(sheet.cell(row, 2).value)
             item = record(day.date(), times, 'Powtarzanie WF — '+year,
                           clean(merged_value(sheet, row, col)),
@@ -256,18 +290,94 @@ def write_json(path, value):
     payload = json.dumps(value, ensure_ascii=False, indent=2) + '\n'
     if path.exists() and path.read_text(encoding='utf-8') == payload:
         return
-    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False) as file:
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='\n', dir=path.parent, delete=False) as file:
         file.write(payload)
         temporary = Path(file.name)
     temporary.replace(path)
 
 
+def source_role(filename):
+    return next((role for role, pattern in SOURCE_ROLES.items()
+                 if fnmatchcase(filename.casefold(), pattern)), None)
+
+
+def revision_date(filename):
+    match = REVISION.search(Path(filename).stem)
+    if not match:
+        return None
+    stamp = match[1]
+    if len(stamp) == 8:
+        stamp = '20' + stamp
+    try:
+        return date.fromisoformat(stamp)
+    except ValueError as exc:
+        raise SourceError(f'Nieprawidłowa data rewizji: {filename}.') from exc
+
+
+def previous_revisions(path):
+    if path is None:
+        return {}
+    metadata = json.loads(path.read_text(encoding='utf-8'))
+    sources = metadata.get('sources') if isinstance(metadata, dict) else None
+    if not isinstance(sources, list):
+        raise SourceError('Metadane opublikowanego planu nie zawierają listy źródeł.')
+    revisions = {}
+    for item in sources:
+        if (not isinstance(item, dict) or not isinstance(item.get('file'), str)
+                or not isinstance(item.get('role'), str) or item['role'] not in SOURCE_ROLES):
+            raise SourceError('Nieprawidłowe źródło w metadanych opublikowanego planu.')
+        role = item['role']
+        if role in revisions:
+            raise SourceError(f'Powtórzone źródło w metadanych opublikowanego planu: {role}.')
+        revisions[role] = revision_date(item['file'])
+    if revisions.keys() != SOURCE_ROLES.keys():
+        raise SourceError('Niekompletna lista źródeł w metadanych opublikowanego planu.')
+    return revisions
+
+
+def select_online_documents(urls, baseline):
+    grouped = {role: [] for role in SOURCE_ROLES}
+    for url in urls:
+        filename = Path(unquote(urlsplit(url).path)).name
+        role = source_role(filename)
+        if role is not None:
+            grouped[role].append((filename, url))
+
+    selected = []
+    for role, documents in grouped.items():
+        if not documents:
+            raise SourceError(f'Brak wymaganego dokumentu na stronie WAT: {role}.')
+        revisions = {filename: revision_date(filename) for filename, _ in documents}
+        if len(revisions) > 1 and None in revisions.values():
+            raise SourceError(f'Nie można porównać dokumentów {role}: brak daty rewizji w nazwie.')
+        latest = max((value for value in revisions.values() if value is not None), default=None)
+        previous = baseline.get(role)
+        if previous is not None and (latest is None or latest < previous):
+            raise SourceError(f'Dokument {role} ma nieznaną lub starszą rewizję niż opublikowana ({previous}).')
+        selected.extend(url for filename, url in documents if revisions[filename] == latest)
+    return sorted(selected)
+
+
+def copy_selected_sources(cache, source_dir, manifest):
+    selected = {}
+    for item in manifest:
+        filename = item['originalName']
+        role = source_role(filename)
+        previous = selected.get(role)
+        if previous is not None:
+            if previous['sha256'] != item['sha256']:
+                raise SourceError(f'Dokumenty {role} z tej samej daty rewizji mają różną treść.')
+            continue
+        selected[role] = item
+        shutil.copyfile(cache / item['file'], source_dir / filename)
+    return list(selected.values())
+
+
 def run(source_dir, output, download_manifest=None):
-    roles = {'schedule': 'rozklad_zajec*.xlsx', 'staff': 'plan_obciazenia*.xlsx',
-             'guidelines': 'wytyczne*.docx', 'retakes': '*harmonogram_powtarzanie*.xlsx'}
     files = {}
-    for role, pattern in roles.items():
-        candidates = sorted(source_dir.glob(pattern))
+    paths = [path for path in source_dir.iterdir() if path.is_file()] if source_dir.is_dir() else []
+    for role, pattern in SOURCE_ROLES.items():
+        candidates = sorted(path for path in paths if source_role(path.name) == role)
         if len(candidates) != 1:
             raise SourceError(f'{role}: oczekiwano jednego pliku {pattern}, znaleziono {len(candidates)}.')
         files[role] = candidates[0]
@@ -291,17 +401,20 @@ def run(source_dir, output, download_manifest=None):
     for key, ids in slots.items():
         if len(ids)>1:
             report['conflictingSlots'].append(dict(date=key[0], startTime=key[1], group=key[2], ids=ids))
-    metadata = dict(schemaVersion=1, timezone='Europe/Warsaw', academicYear='2026/2027',
+    if download_manifest is not None and report['conflictingSlots']:
+        raise SourceError('Pobrany rozkład zawiera sprzeczne terminy dla tej samej grupy.')
+    metadata = dict(schemaVersion=1, timezone='Europe/Warsaw', academicYear=ACADEMIC_YEAR,
                     semester='winter', sourcePage=SOURCE_URL, timeGridSource=TIME_SOURCE,
                     importMode='download' if download_manifest is not None else 'local-files', sources=[dict(role=role, file=p.name,
                     sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for role,p in files.items()],
                     limitations=['Pełne opisy poszczególnych lekcji nie są dostępne; zachowano ich numery i kody.',
                                  'Puste lecturer/location oznaczają brak danych, nie brak zajęć.',
-                                 'Kolumna W zachowana jako uwaga; brak reguł przypisania zastępstw do dat.',
-                                 'Aktualność plików względem strony WAT nie została potwierdzona online.'],
+                                 'Kolumna W zachowana jako uwaga; brak reguł przypisania zastępstw do dat.'],
                     report=report)
     if download_manifest is not None:
         metadata['downloadManifest'] = download_manifest
+    else:
+        metadata['limitations'].append('Aktualność plików względem strony WAT nie została potwierdzona online.')
     write_json(output.with_name('schedule.meta.json'), metadata)
     write_json(output, records)
     return report
@@ -312,23 +425,23 @@ def main():
     parser.add_argument('--source-dir', type=Path, default=ROOT/'data/sources')
     parser.add_argument('--output', type=Path, default=ROOT/'data/schedule.json')
     parser.add_argument('--download', action='store_true', help='Pobierz źródła ze strony WAT przed parsowaniem.')
+    parser.add_argument('--baseline', type=Path, help='Metadane opublikowanego planu do kontroli dat rewizji przy --download.')
     args = parser.parse_args()
+    if args.baseline is not None and not args.download:
+        parser.error('--baseline wymaga --download.')
     try:
         if args.download:
             with tempfile.TemporaryDirectory() as directory:
                 cache = Path(directory)/'downloads'
-                manifest = download_sources(cache)
+                baseline = previous_revisions(args.baseline)
+                manifest = download_sources(cache, select=lambda urls: select_online_documents(urls, baseline))
                 source_dir = Path(directory)/'sources'
                 source_dir.mkdir()
-                for item in manifest:
-                    destination = source_dir/item['originalName']
-                    if destination.exists():
-                        raise SourceError('Niejednoznaczne nazwy pobranych dokumentów.')
-                    shutil.copyfile(cache/item['file'], destination)
-                report = run(source_dir, args.output, manifest)
+                selected = copy_selected_sources(cache, source_dir, manifest)
+                report = run(source_dir, args.output, selected)
         else:
             report = run(args.source_dir, args.output)
-    except (SourceError, ValueError, OSError) as exc:
+    except (SourceError, ValueError, OSError, BadZipFile, ET.ParseError, openpyxl.utils.exceptions.InvalidFileException) as exc:
         parser.exit(1, f'Błąd importu: {exc}\n')
     print(json.dumps(report, ensure_ascii=True, indent=2))
 
