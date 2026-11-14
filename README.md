@@ -1,4 +1,4 @@
-# WAT WF Plan — etap 3
+# WAT WF Plan — etap 4
 
 ## Podgląd aplikacji
 
@@ -35,6 +35,29 @@ niezależnie od dnia otwartego w kalendarzu. Odliczanie uwzględnia strefę
 Europe/Warsaw i aktualizuje się co sekundę. Po rozpoczęciu zajęć karta przechodzi
 do kolejnego terminu. Bez filtrów uwzględnia wszystkie grupy.
 
+### Instalacja i plan offline
+
+Na telefonie otwórz plan pod adresem **HTTPS** i naciśnij „Zainstaluj aplikację”.
+Instrukcja w aplikacji pokazuje kroki dla Safari na iOS i Chrome na Androidzie.
+Po dodaniu ikony do ekranu głównego otwórz ją raz z dostępem do internetu.
+W tym widoku poczekaj na komunikat „Plan dostępny offline”.
+Kroki instalacji opisują także [Apple Support](https://support.apple.com/en-az/guide/iphone/iphea86e5236/26/ios/26)
+oraz [Pomoc Google Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=pl).
+
+Do testu na komputerze wystarczy `http://127.0.0.1:8080/`. Zaczekaj na
+komunikat o dostępności offline, przełącz sieć na „Offline” w narzędziach
+deweloperskich i odśwież stronę zwykłym odświeżeniem. Plan, filtry i kalendarz
+mają pozostać dostępne. Adres komputera w sieci lokalnej po zwykłym HTTP nie
+zastępuje HTTPS przy testowaniu na telefonie.
+
+Service worker zapisuje pliki aplikacji, plan i metadane. Przy odświeżeniu
+próbuje pobrać aktualny plan, a gdy pobranie się nie powiedzie, używa zapisanej
+wersji. Wyczyszczenie danych witryny usuwa również zapis dla trybu offline.
+Po zmianie plików aplikacji zwiększ `CACHE_VERSION` w `sw.js`, aby nowa wersja
+trafiła do pamięci podręcznej. Zamknij wcześniejsze karty aplikacji i otwórz ją
+ponownie, aby aktywować przygotowaną aktualizację. Zmiana samych danych planu
+jest pobierana przy odświeżeniu bez zwiększania wersji aplikacji.
+
 ### Rozwój frontendu
 
 Do kompilacji użyj Node.js 22+ i pnpm 11. Po zmianie HTML, JS lub `styles/input.css`:
@@ -53,12 +76,13 @@ nie wymaga trybu obserwowania zmian.
 
 Testy Node.js obejmują indeksowanie, poprawność danych, powiązania filtrów,
 wyszukiwanie bez polskich znaków, zapis wyboru i odliczanie przy zmianie czasu.
+Testy service workera sprawdzają uruchomienie planu offline, zastąpienie danych
+po udanej aktualizacji i zachowanie zapisanej wersji przy błędzie pobrania.
 
 ## Pobieranie i parsowanie danych — etap 1
 
 Parser dokumentów SWF WAT. Wynik: `data/schedule.json` (tablica rekordów)
 oraz `data/schedule.meta.json` (pochodzenie i raport jakości).
-Projekt nie zawiera jeszcze PWA ani GitHub Actions.
 
 ## Uruchomienie lokalne
 

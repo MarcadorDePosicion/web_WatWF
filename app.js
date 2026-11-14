@@ -1,4 +1,5 @@
 import {warsawToday, shiftDate, weekDates, formatDate, indexSchedule, locationTone, entryCount} from './js/schedule.js';
+import {registerOffline, setSavedPlanState} from './js/pwa.js';
 import {
   preparePlan, filterOptions, matchingPlan, restoreFilters, saveFilters,
   normalizeSearch, groupLabel, upcomingLesson, countdownLabel,
@@ -174,6 +175,7 @@ async function load() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const records = await response.json();
     const byDate = indexSchedule(records);
+    setSavedPlanState(response.headers.get('X-WAT-Cache') === 'fallback');
     if (!byDate.size) {
       state.replaceChildren(element('h2','','Plan nie zawiera jeszcze wpisów'),element('p','','Plik danych jest dostępny, ale nie zawiera zajęć do wyświetlenia.'));
       return;
@@ -244,3 +246,4 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && filters) updateUpcoming();
 });
 load();
+registerOffline();

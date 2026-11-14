@@ -4,10 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#171c17">
   <meta name="description" content="Czytelny plan zajęć wychowania fizycznego WAT. Godziny, grupy, prowadzący i obiekty w jednym miejscu.">
   <title>WAT · Plan zajęć WF</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
   <link rel="stylesheet" href="./styles/app.css">
   <script type="module" src="./app.js"></script>
+  <script type="module" src="./js/install.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Przejdź do planu</a>
@@ -43,7 +48,15 @@
       <header class="topbar"><span>WOJSKOWA AKADEMIA TECHNICZNA</span><span class="hidden sm:inline">STUDIUM WYCHOWANIA FIZYCZNEGO</span><span class="sm:hidden">SWF</span></header>
       <main id="main" tabindex="-1">
         <section class="page-intro" aria-labelledby="page-title">
-          <div><p class="eyebrow text-accent mb-3">ROZKŁAD / 2026–2027</p><h1 id="page-title">Plan zajęć<span class="text-accent">.</span></h1><p class="intro-description">Sprawdź godzinę. Poznaj obiekt. Przygotuj się do zajęć.</p></div>
+          <div>
+            <p class="eyebrow text-accent mb-3">ROZKŁAD / 2026–2027</p>
+            <h1 id="page-title">Plan zajęć<span class="text-accent">.</span></h1>
+            <p class="intro-description">Sprawdź godzinę. Poznaj obiekt. Przygotuj się do zajęć.</p>
+            <div class="pwa-actions">
+              <button id="open-install" type="button" class="quiet-button install-button" aria-haspopup="dialog" aria-controls="install-dialog" hidden>Zainstaluj aplikację</button>
+              <span id="pwa-status" role="status" class="pwa-status" hidden></span>
+            </div>
+          </div>
           <div class="intro-emblem" aria-hidden="true"><svg viewBox="0 0 180 100" fill="none"><rect x="2" y="2" width="176" height="96" rx="46"/><rect x="13" y="13" width="154" height="74" rx="35"/><rect x="24" y="24" width="132" height="52" rx="24"/><path d="M90 2v96M62 24v52M118 24v52"/><circle cx="90" cy="50" r="14"/></svg><span>SPRAWNOŚĆ · SYSTEMATYCZNOŚĆ</span></div>
         </section>
 
@@ -101,5 +114,33 @@
       <footer class="footer flex flex-wrap justify-between gap-2"><span>WAT WF <span class="text-accent">/</span> Plan na dobry trening</span><span>Na podstawie dokumentów SWF · <a href="./data/schedule.meta.json">Informacje o danych</a></span></footer>
     </div>
   </div>
+  <dialog id="install-dialog" class="install-dialog" aria-labelledby="install-title">
+    <div class="install-heading">
+      <h2 id="install-title">Jak zainstalować aplikację na telefonie</h2>
+      <form method="dialog">
+        <button type="submit" class="icon-button" aria-label="Zamknij instrukcję instalacji" autofocus>×</button>
+      </form>
+    </div>
+    <div class="install-platforms">
+      <section class="install-platform" aria-labelledby="install-ios">
+        <h3 id="install-ios">iOS · Safari</h3>
+        <ol class="install-steps">
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Otwórz plan w <strong>Safari</strong>.</span></li>
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Dotknij <strong>Udostępnij</strong> w pasku Safari lub w menu strony.</span></li>
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Wybierz <strong>Dodaj do ekranu początkowego</strong>.</span></li>
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Włącz <strong>Otwórz jako aplikację internetową</strong>, jeśli widzisz tę opcję. Dotknij <strong>Dodaj</strong>.</span></li>
+        </ol>
+      </section>
+      <section class="install-platform" aria-labelledby="install-android">
+        <h3 id="install-android">Android · Chrome</h3>
+        <ol class="install-steps">
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Otwórz plan w <strong>Chrome</strong>.</span></li>
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Dotknij <strong>Więcej</strong> <span aria-hidden="true">⋮</span> obok paska adresu.</span></li>
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Wybierz <strong>Dodaj do ekranu głównego</strong> lub <strong>Zainstaluj i utwórz skrót</strong>.</span></li>
+          <li><span class="install-arrow" aria-hidden="true">→</span><span>Dotknij <strong>Zainstaluj</strong> i potwierdź.</span></li>
+        </ol>
+      </section>
+    </div>
+  </dialog>
 </body>
 </html>
