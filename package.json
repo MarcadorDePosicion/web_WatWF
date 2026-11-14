@@ -6,7 +6,7 @@
   "scripts": {
     "build:css": "tailwindcss -i ./styles/input.css -o ./styles/app.css --minify",
     "watch:css": "tailwindcss -i ./styles/input.css -o ./styles/app.css --watch",
-    "check": "node --check app.js && node --check js/install.js && node --check js/pwa.js && node --check sw.js && node --test tests/schedule.test.js tests/sw.test.js"
+    "check": "node --check app.js && node --check js/install.js && node --check js/pwa.js && node --check sw.js && node --test tests/*.test.js"
   },
   "devDependencies": {
     "@tailwindcss/cli": "4.1.18",

@@ -13,10 +13,10 @@ const json = body => new Response(body, {headers: {'Content-Type': 'application/
 const schedulePath = 'data/schedule.json';
 const metadataPath = 'data/schedule.meta.json';
 
-function worker({clock = setTimeout} = {}) {
+function worker({clock = setTimeout, windows = []} = {}) {
   const listeners = new Map();
   const stores = new Map();
-  const state = {claimed: false, networkRequests: []};
+  const state = {claimed: false, networkRequests: [], openedWindows: []};
   state.network = async url => {
     if (url === `${scope}${schedulePath}`) return json(schedule);
     if (url === `${scope}${metadataPath}`) return json(metadata);
@@ -48,7 +48,11 @@ function worker({clock = setTimeout} = {}) {
   runInNewContext(source, {
     self: {
       registration: {scope},
-      clients: {claim: () => { state.claimed = true; }},
+      clients: {
+        claim: () => { state.claimed = true; },
+        matchAll: async ({type}) => type === 'window' ? windows : [],
+        openWindow: async url => { state.openedWindows.push(url); },
+      },
       addEventListener: (name, callback) => listeners.set(name, callback),
     },
     caches, fetch, URL, Request, Response, Headers, AbortController, setTimeout: clock, clearTimeout,
@@ -66,6 +70,15 @@ function worker({clock = setTimeout} = {}) {
       listeners.get('fetch')({request: {url, mode, method, headers}, respondWith: promise => { result = promise; }});
       return result;
     },
+    notificationClick(data) {
+      let completion;
+      let closed = false;
+      listeners.get('notificationclick')({
+        notification: {data, close: () => { closed = true; }},
+        waitUntil: promise => { completion = promise; },
+      });
+      return {closed, completion};
+    },
   };
 }
 
@@ -77,7 +90,10 @@ test('offline boot serves the scoped app shell and real schedule data', async ()
   app.state.network = () => { throw new Error('Offline'); };
   const home = await app.request(`${scope}?start=home`, {mode: 'navigate'});
   assert.equal(await home.text(), readAsset('index.html', 'utf8'));
-  for (const path of ['app.js', 'js/schedule.js', 'js/personal-plan.js', 'js/install.js', 'js/pwa.js', 'styles/app.css', 'manifest.json']) {
+  for (const path of [
+    'app.js', 'js/schedule.js', 'js/personal-plan.js', 'js/install.js', 'js/pwa.js',
+    'js/reminders.js', 'js/calendar-export.js', 'styles/app.css', 'manifest.json',
+  ]) {
     assert.equal(await (await app.request(`${scope}${path}`)).text(), readAsset(path, 'utf8'));
   }
   const manifest = JSON.parse(readAsset('manifest.json', 'utf8'));
@@ -154,4 +170,43 @@ test('failed replacement leaves old cache intact; activation removes only this s
   assert.equal(app.stores.has(`${prefix}old`), false);
   assert.equal(app.stores.has('wat-wf:https://example.test/other/:v1'), true);
   assert.equal(app.stores.has('unrelated-cache'), true);
+});
+
+test('a notification click navigates and focuses this app’s window for the lesson date', async () => {
+  const lessonDate = '2026-11-16';
+  const target = `${scope}?date=${lessonDate}`;
+  const calls = [];
+  const appWindow = {
+    url: `${scope}index.html`,
+    async navigate(url) {
+      calls.push(['navigate', url]);
+      return {focus: () => calls.push(['focus'])};
+    },
+  };
+  const app = worker({windows: [{url: 'https://example.test/other/'}, appWindow]});
+  const click = app.notificationClick({lessonDate});
+  assert.equal(click.closed, true);
+  await click.completion;
+  assert.deepEqual(calls, [['navigate', target], ['focus']]);
+  assert.deepEqual(app.state.openedWindows, []);
+});
+
+test('a notification click focuses a window that already shows the lesson date', async () => {
+  const lessonDate = '2026-11-16';
+  let focused = false;
+  const app = worker({windows: [{url: `${scope}?date=${lessonDate}`, focus: () => { focused = true; }}]});
+  await app.notificationClick({lessonDate}).completion;
+  assert.equal(focused, true);
+  assert.deepEqual(app.state.openedWindows, []);
+});
+
+test('a notification click opens only the scoped date URL when navigation is unavailable', async () => {
+  const lessonDate = '2026-11-16';
+  const app = worker({windows: [{url: scope, async navigate() { throw new Error('Navigation unavailable'); }}]});
+  await app.notificationClick({lessonDate, url: 'https://outside.test/'}).completion;
+  assert.deepEqual(app.state.openedWindows, [`${scope}?date=${lessonDate}`]);
+
+  const invalid = app.notificationClick({lessonDate: 'https://outside.test/'});
+  assert.equal(invalid.completion, undefined);
+  assert.equal(app.state.openedWindows.length, 1);
 });

@@ -98,6 +98,36 @@
               <label class="filter-field" for="filter-lecturer"><span>Prowadzący</span><select id="filter-lecturer"></select></label>
             </div>
           </form>
+          <details class="reminder-panel" id="reminder-panel">
+            <summary>Przypomnienia i kalendarz</summary>
+            <div class="reminder-grid">
+              <section aria-labelledby="web-reminder-heading">
+                <h2 id="web-reminder-heading">Powiadomienia webowe</h2>
+                <p class="reminder-hint">Pozostaw plan otwarty. Po uśpieniu lub zamknięciu aplikacji przypomnienia może wyświetlać kalendarz telefonu.</p>
+                <div class="reminder-actions">
+                  <label class="reminder-lead" for="reminder-lead">Przypomnij
+                    <select id="reminder-lead" aria-label="Wyprzedzenie powiadomienia">
+                      <option value="15">15 min wcześniej</option>
+                      <option value="30" selected>30 min wcześniej</option>
+                      <option value="60">60 min wcześniej</option>
+                    </select>
+                  </label>
+                  <button type="button" class="quiet-button" id="toggle-reminders" disabled>Włącz powiadomienia</button>
+                </div>
+                <p class="reminder-status" id="reminder-status" role="status"></p>
+              </section>
+              <section aria-labelledby="calendar-export-heading">
+                <h2 id="calendar-export-heading">Kalendarz telefonu</h2>
+                <p class="reminder-hint">Plik .ics zawiera zajęcia pasujące do filtrów i alert 30 minut przed każdym terminem.</p>
+                <button type="button" class="quiet-button calendar-export-button" id="export-calendar" disabled>Dodaj swój plan do kalendarza telefonu <span aria-hidden="true">↓</span></button>
+                <p class="reminder-status" id="calendar-export-status" role="status"></p>
+                <details class="calendar-help">
+                  <summary>Jak zaimportować plik .ics</summary>
+                  <p>Na iPhonie możesz otworzyć plik .ics jako załącznik w Mail. W Kalendarzu Google zaimportuj go w przeglądarce na komputerze, a terminy pojawią się na telefonie po synchronizacji. Po imporcie sprawdź alert wydarzenia i ustawienia powiadomień kalendarza.</p>
+                </details>
+              </section>
+            </div>
+          </details>
           <div class="overview flex flex-wrap items-center justify-between gap-3"><p><span class="status-dot" aria-hidden="true"></span><span id="data-range"></span></p><p id="total-count" class="font-mono"></p></div>
           <section class="calendar" aria-label="Wybór dnia">
             <div class="calendar-toolbar flex flex-wrap items-center justify-between gap-3">

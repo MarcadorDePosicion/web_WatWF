@@ -1,7 +1,9 @@
 import {warsawToday, shiftDate, weekDates, formatDate, indexSchedule, locationTone, entryCount} from './js/schedule.js';
 import {registerOffline, setSavedPlanState} from './js/pwa.js';
+import {buildCalendar} from './js/calendar-export.js';
+import {createReminders} from './js/reminders.js';
 import {
-  preparePlan, filterOptions, matchingPlan, restoreFilters, saveFilters,
+  preparePlan, filterOptions, matchingPlan, restoreFilters, saveFilters, filterStorageKey,
   normalizeSearch, groupLabel, upcomingLesson, countdownLabel,
 } from './js/personal-plan.js';
 
@@ -13,6 +15,47 @@ const filterLabels = {
 };
 let plan = [], matches = [], visibleByDate = new Map();
 let filters, selectedDate, firstDate, lastDate, upcoming, countdownTimer;
+let requestingPermission = false;
+
+const reminders = createReminders({getEntries: personalMatches, onChange: renderReminderSettings});
+
+function personalMatches() {
+  return filters?.group || filters?.lecturer ? matches : [];
+}
+
+function renderReminderSettings(state) {
+  const entries = personalMatches();
+  const toggle = get('toggle-reminders');
+  const lead = get('reminder-lead');
+  const status = get('reminder-status');
+  const exportStatus = get('calendar-export-status');
+  const selected = Boolean(filters?.group || filters?.lecturer);
+  const noScope = 'Wybierz pluton, grupę lub prowadzącego.';
+  const empty = 'Brak zajęć pasujących do filtrów.';
+
+  lead.value = String(state.leadMinutes);
+  lead.disabled = !state.supported;
+  toggle.textContent = state.enabled ? 'Wyłącz powiadomienia' : 'Włącz powiadomienia';
+  toggle.disabled = requestingPermission || (!state.enabled && (
+    !state.supported || state.permission === 'denied' || !entries.length
+  ));
+
+  if (requestingPermission) status.textContent = 'Oczekiwanie na zgodę przeglądarki.';
+  else if (!state.supported) status.textContent = 'Powiadomienia webowe są niedostępne w tym widoku. Na iPhonie otwórz aplikację z ekranu głównego.';
+  else if (state.permission === 'denied') status.textContent = 'Powiadomienia są zablokowane. Zmień uprawnienia witryny w ustawieniach przeglądarki.';
+  else if (!selected) status.textContent = noScope;
+  else if (!entries.length) status.textContent = empty;
+  else if (state.error === 'permission') status.textContent = 'Nie udało się poprosić o zgodę. Spróbuj ponownie lub użyj kalendarza.';
+  else if (!state.enabled) status.textContent = 'Powiadomienia wyłączone.';
+  else if (state.error === 'delivery') status.textContent = 'Przeglądarka nie wyświetliła przypomnienia. Sprawdź ustawienia powiadomień lub użyj kalendarza.';
+  else if (!state.ready) status.textContent = 'Oczekiwanie na uruchomienie obsługi powiadomień.';
+  else if (!upcomingLesson(entries, Date.now())) status.textContent = 'Powiadomienia włączone. Brak nowych terminów w wybranym planie.';
+  else status.textContent = `Powiadomienia włączone · ${state.leadMinutes} min przed zajęciami.`;
+
+  get('export-calendar').disabled = !entries.length;
+  if (!selected) exportStatus.textContent = noScope;
+  else if (!entries.length) exportStatus.textContent = empty;
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -85,7 +128,7 @@ function updateUpcoming(now = Date.now(), refresh = false) {
   }
 }
 
-function applyFilters() {
+function applyFilters({keepDate = false} = {}) {
   matches = matchingPlan(plan, filters);
   visibleByDate = new Map();
   for (const {lesson} of matches) {
@@ -94,13 +137,16 @@ function applyFilters() {
   }
   const active = hasFilters();
   const now = Date.now();
-  if (active && !visibleByDate.has(selectedDate) && matches.length) {
+  if (!keepDate && active && !visibleByDate.has(selectedDate) && matches.length) {
     selectedDate = (upcomingLesson(matches, now) ?? matches.at(-1)).lesson.date;
   }
   get('clear-filters').disabled = !(filters.query || active);
   get('day-scope').textContent = active ? 'PLAN DNIA · WYBRANE FILTRY' : 'PLAN DNIA · WSZYSTKIE GRUPY';
   updateUpcoming(now, true);
   render();
+  get('calendar-export-status').textContent = '';
+  renderReminderSettings(reminders.getState());
+  reminders.check();
 }
 
 function render() {
@@ -159,8 +205,14 @@ function render() {
   get('timeline').replaceChildren(fragment);
 }
 
+function isPlanDate(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || iso < firstDate || iso > lastDate) return false;
+  const date = new Date(`${iso}T12:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === iso;
+}
+
 function select(iso) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || iso < firstDate || iso > lastDate) return;
+  if (!isPlanDate(iso)) return;
   selectedDate = iso;
   render();
 }
@@ -184,6 +236,9 @@ async function load() {
     [firstDate,lastDate] = [dates[0], dates.at(-1)];
     const today = warsawToday();
     selectedDate = today < firstDate ? firstDate : today > lastDate ? lastDate : today;
+    const requestedDate = new URLSearchParams(window.location.search).get('date');
+    const keepDate = isPlanDate(requestedDate);
+    if (keepDate) selectedDate = requestedDate;
     get('date-picker').min = firstDate;
     get('date-picker').max = lastDate;
     get('data-range').textContent = `${formatDate(firstDate,{day:'2-digit',month:'2-digit',year:'numeric'})} — ${formatDate(lastDate,{day:'2-digit',month:'2-digit',year:'numeric'})}`;
@@ -192,7 +247,7 @@ async function load() {
     filters = restoreFilters(plan);
     get('filter-query').value = filters.query;
     updateFilterOptions();
-    applyFilters();
+    applyFilters({keepDate});
     state.hidden = true;
     get('schedule').hidden = false;
     clearInterval(countdownTimer);
@@ -242,8 +297,53 @@ get('show-upcoming').addEventListener('click', () => {
   heading.focus({preventScroll: true});
   heading.scrollIntoView({block: 'start'});
 });
+get('reminder-lead').addEventListener('change', event => {
+  reminders.setLead(Number(event.target.value));
+});
+get('toggle-reminders').addEventListener('click', async () => {
+  if (reminders.getState().enabled) {
+    reminders.disable();
+    return;
+  }
+  requestingPermission = true;
+  renderReminderSettings(reminders.getState());
+  try {
+    await reminders.enable();
+  } finally {
+    requestingPermission = false;
+    renderReminderSettings(reminders.getState());
+  }
+});
+get('export-calendar').addEventListener('click', () => {
+  const entries = personalMatches();
+  if (!entries.length) return;
+  const status = get('calendar-export-status');
+  try {
+    const content = buildCalendar(entries.map(({lesson}) => lesson));
+    const url = URL.createObjectURL(new Blob([content], {type: 'text/calendar;charset=utf-8'}));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'wat-wf-plan.ics';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    status.textContent = `Plik gotowy do importu · ${entryCount(entries.length)}.`;
+  } catch (error) {
+    console.error('Eksport planu do kalendarza nie powiódł się:', error);
+    status.textContent = 'Nie udało się przygotować pliku kalendarza.';
+  }
+});
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && filters) updateUpcoming();
+});
+// Keep reminder scope aligned when the personal plan is edited in another tab.
+window.addEventListener('storage', event => {
+  if (!filters || (event.key !== filterStorageKey && event.key !== null)) return;
+  filters = restoreFilters(plan);
+  get('filter-query').value = filters.query;
+  updateFilterOptions();
+  applyFilters();
 });
 load();
 registerOffline();

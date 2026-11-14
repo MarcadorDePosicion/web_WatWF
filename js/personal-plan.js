@@ -1,5 +1,5 @@
 const collator = new Intl.Collator('pl', {numeric: true});
-const storageKey = 'wat-wf-plan.filters.v1';
+export const filterStorageKey = 'wat-wf-plan.filters.v1';
 const filterFields = ['company', 'group', 'lecturer'];
 const emptyFilters = {query: '', company: '', group: '', lecturer: ''};
 
@@ -63,7 +63,7 @@ export function restoreFilters(plan) {
   const filters = {...emptyFilters};
   let stored;
   try {
-    stored = JSON.parse(localStorage.getItem(storageKey));
+    stored = JSON.parse(localStorage.getItem(filterStorageKey));
   } catch {
     return filters;
   }
@@ -79,7 +79,7 @@ export function restoreFilters(plan) {
 
 export function saveFilters(filters) {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(filters));
+    localStorage.setItem(filterStorageKey, JSON.stringify(filters));
   } catch {
     // Filters remain usable when browser storage is disabled or full.
   }

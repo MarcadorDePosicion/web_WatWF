@@ -1,4 +1,4 @@
-# WAT WF Plan — etap 4
+# WAT WF Plan — etap 5
 
 ## Podgląd aplikacji
 
@@ -34,6 +34,32 @@ Karta „Najbliższe zajęcia” wyszukuje następny pasujący termin w całym r
 niezależnie od dnia otwartego w kalendarzu. Odliczanie uwzględnia strefę
 Europe/Warsaw i aktualizuje się co sekundę. Po rozpoczęciu zajęć karta przechodzi
 do kolejnego terminu. Bez filtrów uwzględnia wszystkie grupy.
+
+### Przypomnienia i kalendarz
+
+Wybierz pluton, grupę lub prowadzącego i rozwiń „Przypomnienia i kalendarz”.
+Do przypomnień oraz eksportu trafiają zajęcia pasujące do bieżących filtrów
+z całego rozkładu. Wyczyść pole wyszukiwania, jeśli chcesz uwzględnić wszystkie
+zajęcia przypisane do wybranej grupy lub osoby. Zmiana filtrów synchronizuje się
+między kartami tej samej przeglądarki.
+
+- **Powiadomienia webowe.** Wybierz 15, 30 lub 60 minut i naciśnij „Włącz
+  powiadomienia”. Przeglądarka poprosi o zgodę. Powiadomienie zawiera temat,
+  obiekt i godzinę, a jego kliknięcie otwiera odpowiedni dzień. Aplikacja
+  zapamiętuje ustawienia na urządzeniu. Na iOS używaj wersji dodanej do
+  ekranu głównego. Przypomnienia działają, gdy otwarta aplikacja może
+  wykonywać kod. Po uśpieniu lub zamknięciu aplikacji użyj alertów kalendarza.
+- **Kalendarz telefonu.** Pobierz `wat-wf-plan.ics`. Każdy termin zawiera
+  `VALARM` z wyprzedzeniem 30 minut. Plik można zaimportować na iPhonie
+  z załącznika w Mail lub na komputerze w Kalendarzu Google i zsynchronizować
+  z telefonem. Po imporcie sprawdź, czy alert pojawił się przy wydarzeniu
+  i czy kalendarz ma dostęp do powiadomień. Jeśli kalendarz pominął alert,
+  ustaw przypomnienie 30 minut przed wydarzeniem w jego ustawieniach. Plik
+  zawiera plan z chwili eksportu. Po zmianie planu pobierz nowy plik i zastąp
+  stare wydarzenia w kalendarzu.
+
+Instrukcje importu udostępniają [Apple](https://support.apple.com/en-euro/guide/iphone/ipha0d932e96/27/ios/27)
+i [Kalendarz Google](https://support.google.com/calendar/answer/37118?hl=pl).
 
 ### Instalacja i plan offline
 

@@ -1,11 +1,12 @@
 const scope = new URL(self.registration.scope);
 const cachePrefix = `wat-wf:${scope.href}:`;
 // Bump after changes to the app shell so older tabs keep a consistent release.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const cacheName = `${cachePrefix}${CACHE_VERSION}`;
 const shell = new Set([
   'index.html', 'app.js', 'styles/app.css',
   'js/schedule.js', 'js/personal-plan.js', 'js/install.js', 'js/pwa.js',
+  'js/reminders.js', 'js/calendar-export.js',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
   'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
 ]);
@@ -115,4 +116,27 @@ self.addEventListener('fetch', event => {
   } else if (shell.has(path)) {
     event.respondWith(serveShell(path, request));
   }
+});
+
+self.addEventListener('notificationclick', event => {
+  const date = event.notification.data?.lessonDate;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  event.notification.close();
+  event.waitUntil((async () => {
+    const target = new URL(scope);
+    target.searchParams.set('date', date);
+    const windows = await self.clients.matchAll({type: 'window'});
+    const onDate = windows.find(client => client.url === target.href);
+    if (onDate) return onDate.focus();
+    const indexPath = new URL('index.html', scope).pathname;
+    const current = windows.find(client => {
+      const {origin, pathname} = new URL(client.url);
+      return origin === scope.origin && (pathname === scope.pathname || pathname === indexPath);
+    });
+    if (current) {
+      const tab = await current.navigate(target.href).catch(() => null);
+      if (tab) return tab.focus();
+    }
+    return self.clients.openWindow(target.href);
+  })());
 });
