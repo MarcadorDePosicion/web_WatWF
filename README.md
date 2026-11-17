@@ -1,227 +1,54 @@
 # WAT WF Plan
 
-## Podgląd aplikacji
+WAT WF Plan to aplikacja webowa do przeglądania planu zajęć wychowania fizycznego na Wojskowej Akademii Technicznej. Zbiera w jednym miejscu terminy, obiekty, prowadzących i uwagi z rozkładów Studium Wychowania Fizycznego. Plan można zawęzić do swojej grupy, dodać do ekranu głównego telefonu i przeglądać offline.
 
-Z katalogu repozytorium uruchom:
+## Funkcje
 
-```powershell
+- Dzienny plan z tygodniowym paskiem dat, godzinami zajęć i kolorami obiektów sportowych.
+- Wyszukiwanie także bez polskich znaków i powiązane filtry kompanii, wydziału, grupy oraz prowadzącego. Wybór zapisuje się w przeglądarce.
+- Karta „Najbliższe zajęcia” z odliczaniem uwzględniającym strefę czasową Warszawy.
+- Instalacja jako aplikacja PWA na iOS i Androidzie. Po pierwszym otwarciu z dostępem do internetu aplikacja zapisuje rozkład do użytku offline.
+
+## Przypomnienia i kalendarz
+
+Po wybraniu grupy lub prowadzącego panel „Przypomnienia i kalendarz” pozwala włączyć powiadomienia na 15, 30 lub 60 minut przed zajęciami. Powiadomienie zawiera godzinę, temat i miejsce. Przeglądarka potrzebuje zgody na powiadomienia, a aplikacja musi być otwarta i aktywna. Na iOS powiadomienia są dostępne w aplikacji dodanej do ekranu głównego.
+
+Plik `wat-wf-plan.ics` zawiera terminy pasujące do filtrów. Każdy termin ma alert ustawiony na 30 minut przed zajęciami. Po imporcie przypomnienia obsługuje kalendarz telefonu, również po zamknięciu planu. Zależą one od zachowania alertu podczas importu i od ustawień powiadomień kalendarza. Plik jest kopią planu z chwili eksportu. [Import na iPhonie](https://support.apple.com/en-euro/guide/iphone/ipha0d932e96/27/ios/27) · [Import do Kalendarza Google](https://support.google.com/calendar/answer/37118?hl=pl)
+
+## Dane i aktualizacje
+
+Źródłami są rozkład zajęć, obciążenie kadry, wytyczne i harmonogram powtarzania WF. Wersja dołączona do projektu obejmuje semestr zimowy 2026/2027. [Rozkłady zajęć SWF WAT](https://www.wojsko-polskie.pl/wat/swf-rozklady-zajec/)
+
+Importer w Pythonie odczytuje arkusze XLSX i wytyczne DOCX, a aplikacja korzysta z [planu w formacie JSON](data/schedule.json). [Metadane](data/schedule.meta.json) wskazują pliki źródłowe, daty i braki w rozkładzie. Każdy wpis zachowuje oznaczenie lekcji oraz adres komórki, z której pochodzi. Jeśli źródło nie podaje prowadzącego, obiektu lub szczegółowego tematu, plan zachowuje tylko dostępną informację.
+
+[Workflow aktualizacji](.github/workflows/update-schedule.yml) sprawdza dokumenty codziennie o 06:17 czasu warszawskiego. Po pomyślnej walidacji zapisuje zmieniony plan i metadane w jednym commicie. W razie blokady strony WAT lub nierozpoznanego formatu zachowuje ostatni plan. Ręczne uruchomienie z opcją `dry_run` sprawdza źródło bez tworzenia commita. Parser obsługuje układ dokumentów z zimy 2026/2027.
+
+## Uruchomienie lokalne
+
+Frontend korzysta z HTML, modułów JavaScript i skompilowanego Tailwind CSS. Do podglądu wystarczy Python 3.11 lub nowszy. Polecenie zakłada, że bieżący katalog zawiera plik `index.html`.
+
+```sh
 python -m http.server 8080 --bind 127.0.0.1
 ```
 
-Otwórz http://127.0.0.1:8080/ w przeglądarce. Gotowy CSS jest w repozytorium,
-więc do samego podglądu nie trzeba instalować Node.js ani pakietów. Nie otwieraj
-`index.html` przez `file://`, ponieważ przeglądarka musi pobrać plik JSON przez HTTP.
-Serwer zatrzymasz skrótem Ctrl+C.
+Podgląd jest dostępny pod [http://127.0.0.1:8080/](http://127.0.0.1:8080/). Instalacja PWA na telefonie wymaga wdrożenia pod adresem HTTPS. Aplikacja może być hostowana jako statyczna strona, na przykład w GitHub Pages.
 
-Interfejs używa lokalnie skompilowanego Tailwind CSS i modułów JavaScript.
-Pokazuje dzienną oś czasu wszystkich grup, wybór daty i tygodniowy pasek dni.
-Karty mają temat, obiekt oznaczony kolorem i tekstem, grupę, prowadzącego,
-godziny oraz rozwijane uwagi i źródła. Obsługiwane są stany ładowania,
-błędu z ponowieniem, pustego pliku i dnia bez wpisów. Braki danych nie są
-zastępowane domyślnym prowadzącym ani obiektem.
+## Rozwój i testy
 
-Wyszukiwarka dopasowuje grupę, temat, obiekt i prowadzącego także bez polskich
-znaków. Listy kompanii lub wydziałów, plutonów lub grup i prowadzących ograniczają
-się wzajemnie. Pola wyboru oraz tekst zapytania zapisują się w danej przeglądarce
-i wracają po odświeżeniu. Przycisk „Wyczyść filtry” przywraca plan wszystkich grup.
+Kompilacja stylów i testy frontendu wymagają Node.js 22+ oraz pnpm 11.
 
-Plan otwiera się na dzisiejszej dacie w Warszawie, ograniczonej do zakresu rozkładu.
-Jeśli aktywne filtry wykluczają wszystkie wpisy z wybranego dnia, plan przechodzi
-do dnia najbliższych pasujących zajęć lub do ostatniego pasującego dnia z danych.
-Kalendarz pozwala też ręcznie przejść do dnia bez wpisów.
-
-Karta „Najbliższe zajęcia” wyszukuje następny pasujący termin w całym rozkładzie,
-niezależnie od dnia otwartego w kalendarzu. Odliczanie uwzględnia strefę
-Europe/Warsaw i aktualizuje się co sekundę. Po rozpoczęciu zajęć karta przechodzi
-do kolejnego terminu. Bez filtrów uwzględnia wszystkie grupy.
-
-### Przypomnienia i kalendarz
-
-Wybierz pluton, grupę lub prowadzącego i rozwiń „Przypomnienia i kalendarz”.
-Do przypomnień oraz eksportu trafiają zajęcia pasujące do bieżących filtrów
-z całego rozkładu. Wyczyść pole wyszukiwania, jeśli chcesz uwzględnić wszystkie
-zajęcia przypisane do wybranej grupy lub osoby. Zmiana filtrów synchronizuje się
-między kartami tej samej przeglądarki.
-
-- **Powiadomienia webowe.** Wybierz 15, 30 lub 60 minut i naciśnij „Włącz
-  powiadomienia”. Przeglądarka poprosi o zgodę. Powiadomienie zawiera temat,
-  obiekt i godzinę, a jego kliknięcie otwiera odpowiedni dzień. Aplikacja
-  zapamiętuje ustawienia na urządzeniu. Na iOS używaj wersji dodanej do
-  ekranu głównego. Przypomnienia działają, gdy otwarta aplikacja może
-  wykonywać kod. Po uśpieniu lub zamknięciu aplikacji użyj alertów kalendarza.
-- **Kalendarz telefonu.** Pobierz `wat-wf-plan.ics`. Każdy termin zawiera
-  `VALARM` z wyprzedzeniem 30 minut. Plik można zaimportować na iPhonie
-  z załącznika w Mail lub na komputerze w Kalendarzu Google i zsynchronizować
-  z telefonem. Po imporcie sprawdź, czy alert pojawił się przy wydarzeniu
-  i czy kalendarz ma dostęp do powiadomień. Jeśli kalendarz pominął alert,
-  ustaw przypomnienie 30 minut przed wydarzeniem w jego ustawieniach. Plik
-  zawiera plan z chwili eksportu. Po zmianie planu pobierz nowy plik i zastąp
-  stare wydarzenia w kalendarzu.
-
-Instrukcje importu udostępniają [Apple](https://support.apple.com/en-euro/guide/iphone/ipha0d932e96/27/ios/27)
-i [Kalendarz Google](https://support.google.com/calendar/answer/37118?hl=pl).
-
-### Instalacja i plan offline
-
-Na telefonie otwórz plan pod adresem **HTTPS** i naciśnij „Zainstaluj aplikację”.
-Instrukcja w aplikacji pokazuje kroki dla Safari na iOS i Chrome na Androidzie.
-Po dodaniu ikony do ekranu głównego otwórz ją raz z dostępem do internetu.
-W tym widoku poczekaj na komunikat „Plan dostępny offline”.
-Kroki instalacji opisują także [Apple Support](https://support.apple.com/en-az/guide/iphone/iphea86e5236/26/ios/26)
-oraz [Pomoc Google Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=pl).
-
-Do testu na komputerze wystarczy `http://127.0.0.1:8080/`. Zaczekaj na
-komunikat o dostępności offline, przełącz sieć na „Offline” w narzędziach
-deweloperskich i odśwież stronę zwykłym odświeżeniem. Plan, filtry i kalendarz
-mają pozostać dostępne. Adres komputera w sieci lokalnej po zwykłym HTTP nie
-zastępuje HTTPS przy testowaniu na telefonie.
-
-Service worker zapisuje pliki aplikacji, plan i metadane. Przy odświeżeniu
-próbuje pobrać aktualny plan, a gdy pobranie się nie powiedzie, używa zapisanej
-wersji. Wyczyszczenie danych witryny usuwa również zapis dla trybu offline.
-Po zmianie plików aplikacji zwiększ `CACHE_VERSION` w `sw.js`, aby nowa wersja
-trafiła do pamięci podręcznej. Zamknij wcześniejsze karty aplikacji i otwórz ją
-ponownie, aby aktywować przygotowaną aktualizację. Zmiana samych danych planu
-jest pobierana przy odświeżeniu bez zwiększania wersji aplikacji.
-
-### Rozwój frontendu
-
-Do kompilacji użyj Node.js 22+ i pnpm 11. Po zmianie HTML, JS lub `styles/input.css`:
-
-```powershell
+```sh
 pnpm install --frozen-lockfile
 pnpm run build:css
 pnpm run check
 ```
 
-Zapisuj w commicie także `styles/app.css`. Pakiety Tailwind są przypięte do
-wersji 4.1.18; aplikacja nie pobiera stylów, fontów ani skryptów z CDN.
-Opcjonalny skrypt budowania @parcel/watcher jest wyłączony; używany jest
-dostarczany przez pakiet moduł dla platformy. Jednorazowa kompilacja CSS
-nie wymaga trybu obserwowania zmian.
+Testy importera korzystają z dokumentów zapisanych w `data/sources/` i działają bez połączenia z serwisem WAT. Poniższe polecenia instalują zależności, uruchamiają testy i zapisują próbny import w katalogu `.cache/`.
 
-Testy Node.js obejmują indeksowanie, poprawność danych, powiązania filtrów,
-wyszukiwanie bez polskich znaków, zapis wyboru i odliczanie przy zmianie czasu.
-Testy service workera sprawdzają uruchomienie planu offline, zastąpienie danych
-po udanej aktualizacji i zachowanie zapisanej wersji przy błędzie pobrania.
-
-## Automatyczna aktualizacja rozkładu
-
-Workflow `.github/workflows/update-schedule.yml` sprawdza stronę WAT codziennie
-o 06:17 według strefy `Europe/Warsaw`. Po dodaniu pliku do domyślnej gałęzi
-można też wybrać **Actions → Update WAT WF schedule → Run workflow**. Domyślnie
-opcja `dry_run` pozwala uruchomić pobranie i walidację bez tworzenia commita.
-
-Workflow testuje importer i generuje wynik w katalogu tymczasowym. Gdy wykryje
-zmianę, aktualizuje `data/schedule.json` razem z `data/schedule.meta.json` jednym
-commitem bota na gałęzi domyślnej. Gdy ani plan, ani nazwy i sumy kontrolne
-źródeł się nie zmieniły, workflow pomija commit. Błąd pobrania, niezgodność
-formatu lub konflikt rewizji kończy zadanie błędem przed
-publikacją danych. Szczegóły są w logu i podsumowaniu uruchomienia.
-
-Reguły gałęzi muszą zezwalać na zapis przez `GITHUB_TOKEN`. Jeśli inny commit
-trafi na gałąź podczas pobierania, zwykły push może zostać odrzucony. Ponów
-workflow na aktualnej gałęzi. Przy publikacji GitHub Pages z gałęzi commit bota
-nie wyzwala nowego wdrożenia witryny. [Dokumentacja GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#troubleshooting-publishing-from-a-branch)
-
-Na dzień 14 listopada 2026 r. serwis WAT nadal blokuje automatyczne pobieranie.
-Wybór aktualizacji i zabezpieczenie poprzednich danych sprawdzono w testach
-na lokalnych kopiach źródeł. Pierwszy udany import z serwisu pozostaje do
-potwierdzenia w Actions. Parser obsługuje układ znany z zimy 2026/2027.
-Zmianę semestru lub nieznany układ trzeba najpierw sprawdzić na nowych plikach.
-
-## Pobieranie i parsowanie danych — etap 1
-
-Parser dokumentów SWF WAT. Wynik: `data/schedule.json` (tablica rekordów)
-oraz `data/schedule.meta.json` (pochodzenie i raport jakości).
-
-## Uruchomienie lokalne
-
-Python 3.11+. PowerShell, z katalogu repozytorium:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m scraper.parse
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```sh
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python -m scraper.parse --output .cache/preview/schedule.json
 ```
 
-Domyślnie używane są cztery oryginalne pliki dostarczone przez użytkownika
-w `data/sources/`. Pozostają w repozytorium dla odtwarzalności bez sieci.
-Inny katalog: `--source-dir C:/sciezka/do/plikow`.
-Inny wynik: `--output .cache/test/schedule.json`.
-
-Pobranie ze strony i import jednym poleceniem:
-
-```powershell
-.\.venv\Scripts\python.exe -m scraper.parse --download --baseline data/schedule.meta.json --output .cache/test/schedule.json
-```
-
-Sam downloader (`python -m scraper.download`) zapisuje wykryte załączniki
-XLSX, XLS, PDF i DOCX z oficjalnej strony i bezpośrednio połączonych podstron SWF.
-Importer online pobiera tylko role potrzebne do planu (rozkład, obciążenie,
-wytyczne i powtarzanie WF). Przy kilku plikach dla jednej roli wybiera
-najnowszą datę z końcówki `_akt_RRRR-MM-DD` lub `_akt_RR-MM-DD`. Równorzędne pliki o tej samej
-treści traktuje jako jedną wersję. Przy różnych plikach o nieporównywalnych
-datach lub różnej treści z tą samą datą przerywa import. Opcja `--baseline`
-porównuje daty rewizji z metadanymi opublikowanego planu.
-
-## Źródła i interpretacja
-
-- Rozkład z 22.10.2026: tylko **zima 2026/2027**, 6197 wpisów.
-  Arkusz letni tego samego pliku dotyczy **2025/2026** i jest wykluczony.
-- Obciążenie kadry z 22.10.2026: rozwinięcia kodów prowadzących z nagłówków.
-  Arkusz nazywa się „semestr LETNI”, lecz jego tytuł określa zimę 2026/2027.
-  Źródłem konkretnej lekcji jest rozkład, nie tygodniowe obciążenie kadry.
-- Wytyczne z 30.09.2026: obiekty, kategorie tematów i zasady uczestnictwa.
-- Powtarzanie z 30.10.2026: 12 wpisów dla 7, 14 i 21 listopada.
-  Jeden wpis odpowiada jednemu rocznikowi; roczniki mogą ćwiczyć razem.
-- Godziny bloków stacjonarnych: https://wml.wat.edu.pl/siatka-godzin/,
-  potwierdzone na https://wel.wat.edu.pl/przydatne-informacje/siatka-godzinowa-zajec/.
-  Powtarzanie ma własne godziny: 08:00–09:30 i 09:50–11:20.
-
-Wynik: **6209 rekordów**, 01.10.2026–29.01.2027. Puste komórki nie tworzą
-zajęć. Cztery scalone wpisy ODPRAWA SWF / WIGILIA SWF są zdarzeniami kadry,
-nie lekcjami grup objętych scaleniem. Pozostałe scalenia (bloki, daty,
-prowadzący powtarzania) są odczytywane z komórki początkowej.
-Dodatkowe sekcje planu po pierwszych pięciu dniach również są importowane.
-
-Nagłówek soboty błędnie umieszcza 31 października pod listopadem. Parser
-odtwarza datę z ciągu tygodniowego, sprawdza dzień tygodnia i raportuje korektę.
-Obsługiwany jest aktualnie semestr zimowy 2026/2027; nowe semestry wymagają
-weryfikacji układu i aktualizacji parsera, nie podmiany roku w nazwie pliku.
-
-## Kontrakt danych i ograniczenia źródeł
-
-Każdy rekord ma `id`, `date` (ISO), `startTime`, `endTime`, `company`, `platoon`,
-`lecturer`, `topic`, `location`, `notes`. Dodatkowo: `group`, `year`,
-`kind` (regular/retake), `audience`, `sourceCode`, `locationCode`, `sources`
-(nazwa pliku, arkusz i komórka). Identyfikatory są deterministyczne dla treści
-rekordu. Czasy są lokalne Europe/Warsaw. Ponowny import niezmienionych źródeł
-nie zmienia plików wynikowych.
-
-- Wojskowe `topic` ma pełną nazwę kategorii, numer lekcji i oryginalny kod.
-  Wytyczne **nie zawierają szczegółowego opisu każdej lekcji**. Parser go nie
-  wymyśla. Obiekt C zachowuje nazwę toru BTS/BTZ, a B1/B2/B3 — strefy hali.
-- Cywilne tematy są rozwijane z osobnej legendy (AT, NW, G, S, PS, PK itd.).
-- `ZO` pozostaje kodem bez rozwinięcia: brak definicji w dokumentach.
-- 226 wpisów ma `lecturer: null`, 183 ma `location: null`. Null oznacza brak
-  informacji. Dotyczy m.in. ZO, WOLI i 2 PŁ. W wierszach 2 PŁ kod w komórce
-  określa prowadzącego, nie temat.
-- Kolumna W jest zachowana w `notes`. Brak jednoznacznych reguł wskazujących,
-  kiedy jej dodatkowe oznaczenie kadry zastępuje prowadzącego z kolumny D.
-- Cywilne skróty wydziałów pozostają skrótami. Obciążenie kadry nie jest
-  samodzielnym źródłem dat, tematów i obiektów.
-
-Raport rozlicza komórki, wykluczenia, braki i kolizje terminów tej samej grupy.
-Nie wykryto takich kolizji. Nie gwarantuje to poprawności samych źródeł.
-SHA-256 oryginałów znajduje się w metadanych. Dane źródłowe w dokumentach
-służą wyłącznie interpretacji rozkładu; nie są poleceniami dla programu.
-
-## Weryfikacja
-
-12 testów sprawdza rzeczywisty wpis F7, scalenia i godziny powtarzania,
-wykluczenie starego lata i zdarzeń kadry, rozliczenie wszystkich 6201 niepustych
-komórek kalendarza zimowego, daty, identyfikatory, odtwarzalność, odrzucenie
-nieznanych kodów oraz zachowanie planu przy błędzie. Testy nie potwierdzają
-aktualności plików względem niedostępnej strony WAT.
+Źródłowe style znajdują się w `styles/input.css`, a wynik kompilacji w `styles/app.css`. Zmiana plików zapisanych do użytku offline wymaga zwiększenia `CACHE_VERSION` w `sw.js`.
